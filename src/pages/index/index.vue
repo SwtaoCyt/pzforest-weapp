@@ -1,8 +1,9 @@
+
 <template>
   <hello></hello>
 
   <nut-grid :column-num="2">
-    <nut-grid-item text="路由跳转" to="/">
+    <nut-grid-item text="投稿" @click="sendWeibo()">
       <Home />
     </nut-grid-item>
     <nut-grid-item text="链接跳转" url="https://jd.com">
@@ -14,36 +15,110 @@
     {{ msg }} <Dongdong />
     <view class="btn">
       <nut-button type="success" @click="handleLogin()">授权登录</nut-button>
+      <nut-button type="success" @click="handleGet()">获取用户信息</nut-button>
+      <nut-button open-type="getPhoneNumber" @getphonenumber="getphonenumber"
+        >获取用户手机</nut-button
+      >
     </view>
     <nut-toast :msg="msg2" v-model:visible="show" :type="type" :cover="cover" />
   </view>
 </template>
 
-<script>
-import { reactive, toRefs } from 'vue';
-import { Dongdong } from '@nutui/icons-vue-taro';
-import Hello from '@/components/hello.vue';
-import Taro from '@tarojs/taro';
+<script >
+import { reactive, toRefs } from "vue";
+import { Dongdong, Home, Search } from "@nutui/icons-vue-taro";
+import Hello from "@/components/hello.vue";
+import Taro from "@tarojs/taro";
+import { base64ToArrayBuffer } from '@tarojs/taro';
+import CryptoJS from 'crypto-js';
 export default {
-  name: 'Index',
+  name: "Index",
   components: {
     Dongdong,
     Hello,
-
+    Home,
+    Search
   },
   setup () {
-    const state = reactive({
-      msg: '不欢迎使用 NutUI4.0 开发小程序',
-      msg2: '你成功了～123456',
-      type: 'text',
-      show: false,
-      cover: false
-    });
-    const handleLogin = async () => {
-      console.log("叼你老母")
-      const { code } = await Taro.login()
-      console.log(code);
+    const sendWeibo = () => {
+      console.log("hahaah");
+      Taro.navigateTo({ url: '/pages/send/index' })
     }
+    const state = reactive({
+      msg: "不欢迎使用 NutUI4.0 开发小程序",
+      msg2: "你成功了～123456",
+      type: "text",
+      show: false,
+      cover: false,
+    });
+    const getphonenumber = async (e) => {
+      const { encryptedData, iv } = e.detail;
+      const sessionKey = Taro.getStorageSync('session_key')
+      console.log(e);
+      const res = await Taro.request({
+        url: 'http://localhost:8080/weapp/phone',
+        method: 'POST',
+        data: {
+          encryptedData,
+          iv,
+          sessionKey
+        }
+
+      })
+    }
+    const handleGet = () => {
+      Taro.getUserProfile({
+        desc: "用于完善用户信息", // 声明获取用户个人信息后的用途，后续会展示在弹窗中，请谨慎填写
+        success: (res) => {
+          // 开发者妥善保管用户快速填写的头像昵称，避免重复弹窗
+          var encryptedData = res.encryptedData;
+          var iv = res.iv;
+          var session_key = Taro.getStorageSync("session_key");
+          const decryptedData = decryptData(session_key, encryptedData, iv);
+          console.log(decryptedData);
+        },
+      });
+    };
+    const decryptData = function (sessionKey, encryptedData, iv) {
+      console.log("当前sessionkey" + sessionKey);
+      console.log("当前encryptedData" + encryptedData);
+      console.log("当前iv" + iv);
+      // 将密钥转成16字节长度的数组
+      const key = CryptoJS.enc.Base64.parse(sessionKey);
+      // 将iv转成16字节长度的数组
+      const ivBytes = CryptoJS.enc.Base64.parse(iv);
+      // 将加密的数据转成字节数组
+      const ciphertextBytes = CryptoJS.enc.Base64.parse(encryptedData);
+
+      // 解密
+      const decryptedData = CryptoJS.AES.decrypt(
+        { ciphertext: ciphertextBytes },
+        key,
+        { iv: ivBytes, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+      );
+
+      // 将解密后的数据转成字符串
+      const decryptedStr = decryptedData.toString(CryptoJS.enc.Utf8);
+      console.log(decryptedData);
+      console.log(decryptedStr);
+      // 返回解密后的数据
+      return decryptedStr;
+    }
+    const handleLogin = async () => {
+      const { code } = await Taro.login();
+      console.log(code);
+      const { data } = await Taro.request({
+        url: "http://localhost:8080/user/login",
+        method: "POST",
+        data: {
+          code,
+        },
+      });
+
+      console.log(data);
+      Taro.clearStorageSync("session_key", data.data)
+      Taro.setStorageSync("session_key", data.data);
+    };
     const handleClick = (type, msg, cover = false) => {
       state.show = true;
       state.msg2 = msg;
@@ -54,10 +129,13 @@ export default {
     return {
       ...toRefs(state),
       handleClick,
-      handleLogin
-    }
-  }
-}
+      handleLogin,
+      handleGet,
+      getphonenumber,
+      sendWeibo
+    };
+  },
+};
 </script>
 
 <style lang="scss">

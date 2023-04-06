@@ -1,11 +1,10 @@
 export default defineAppConfig({
   pages: [
-    'pages/index/index'
+    'pages/index/index',
+    'pages/send/index'
   ],
   permission:{
-    'scope.userInfo': {
-        desc: '获取用户信息'
-  }
+   
 }
   ,
   window: {

@@ -1488,6 +1488,15 @@
     "@babel/runtime" "^7.14.5"
     "@tarojs/runtime" "3.5.10"
 
+"@tarojs/api@3.6.4":
+  version "3.6.4"
+  resolved "https://registry.npmmirror.com/@tarojs/api/-/api-3.6.4.tgz#65d999ba377dc1904e0f2fe3ae9b53aa26d8abce"
+  integrity sha512-PBgNrqip86UxaeVoUJNdbbXP8hd3Udd1/FyKV/A9GBbOH10QuAyhaKNJcMDDCAZPwqJOF9e2ar6BR4/mjcW5zw==
+  dependencies:
+    "@babel/runtime" "^7.14.5"
+    "@tarojs/runtime" "3.6.4"
+    "@tarojs/shared" "3.6.4"
+
 "@tarojs/cli@3.5.10":
   version "3.5.10"
   resolved "https://registry.npmmirror.com/@tarojs/cli/-/cli-3.5.10.tgz#e47e2fb0f6668f056d791bde2b5f9564a3cc6c03"
@@ -1663,6 +1672,19 @@
     query-string "^7.1.1"
     universal-router "^8.3.0"
 
+"@tarojs/router@^3.6.4":
+  version "3.6.4"
+  resolved "https://registry.npmmirror.com/@tarojs/router/-/router-3.6.4.tgz#4babaee0a6e65535f6b97485f8df197d6c7a8e7a"
+  integrity sha512-RA+YFDWXsLJjTEdreFNZyFtSQ0mRfV7F7kt1ylBZGx89FIkz9azxN49xlTWWTsS41rRR7sDVT17c2hJvx3+T5A==
+  dependencies:
+    "@tarojs/runtime" "3.6.4"
+    "@tarojs/taro" "3.6.4"
+    dingtalk-jsapi "~2.15.2"
+    history "^5.1.0"
+    mobile-detect "^1.4.2"
+    query-string "^7.1.1"
+    universal-router "^8.3.0"
+
 "@tarojs/runner-utils@3.5.10":
   version "3.5.10"
   resolved "https://registry.npmmirror.com/@tarojs/runner-utils/-/runner-utils-3.5.10.tgz#e041613449cc88b88ba5de33e2f41bae0681acf2"
@@ -1677,6 +1699,14 @@
   integrity sha512-zlDVnFAf3sE8Vs1IyT1dpUDiFlmyWpGsAjjc2i7kn/A/1LC8q6NwbOeCb/DuF7B3aT3mVNXkw9NFsggi8yDI6A==
   dependencies:
     "@tarojs/shared" "3.5.10"
+    lodash-es "4.17.21"
+
+"@tarojs/runtime@3.6.4":
+  version "3.6.4"
+  resolved "https://registry.npmmirror.com/@tarojs/runtime/-/runtime-3.6.4.tgz#78e5bbf9b0917d3af9e07e8c5b6a482bbf37d788"
+  integrity sha512-8gXaS8ZK8HheegdsCVTz8ANoPs0EneRY8eYqfesHril95cm9WNu6nQYqCybJC1+YPpOA2jwUGg4gX6vZZT4PoA==
+  dependencies:
+    "@tarojs/shared" "3.6.4"
     lodash-es "4.17.21"
 
 "@tarojs/service@3.5.10":
@@ -1698,6 +1728,11 @@
   version "3.5.10"
   resolved "https://registry.npmmirror.com/@tarojs/shared/-/shared-3.5.10.tgz#b46630620fb2a82ccb3393b47f6d4f181dd43ed0"
   integrity sha512-RN2e0fJfYEIofOnhha5CiGN4JtIS2ZU9lRuzASxb1BOdq/cxp+Om2rqATHL0D3Q1jBkf8xMVOZ77BoT0R/pIIw==
+
+"@tarojs/shared@3.6.4":
+  version "3.6.4"
+  resolved "https://registry.npmmirror.com/@tarojs/shared/-/shared-3.6.4.tgz#bc61276c2e24e3baed5731b801058d278b0a185d"
+  integrity sha512-AgKNyYH+6e+bkaDAHwUsE9BiBc//VwmEZyzBCDEL6zmDtWm6pVMtvlF3UT7Mdb2Fm7oKBP/JKK4b1sb5O5kriw==
 
 "@tarojs/taro-h5@3.5.10":
   version "3.5.10"
@@ -1728,6 +1763,14 @@
   dependencies:
     "@tarojs/api" "3.5.10"
     "@tarojs/runtime" "3.5.10"
+
+"@tarojs/taro@3.6.4":
+  version "3.6.4"
+  resolved "https://registry.npmmirror.com/@tarojs/taro/-/taro-3.6.4.tgz#76aaf288f5dd0bfa9ad38a83c68d8bf95624b6d0"
+  integrity sha512-eAawj9N/M+ZLeJtID2CV0ZnU6UCprWHi7TeGcAWpjU1nLwbfiAFHAssfyC4B9CrCvY1OLoPtHT7o3NpCzR1M0A==
+  dependencies:
+    "@tarojs/api" "3.6.4"
+    "@tarojs/runtime" "3.6.4"
 
 "@tarojs/taroize@3.5.10":
   version "3.5.10"
@@ -4300,6 +4343,11 @@ crypt@0.0.2:
   version "0.0.2"
   resolved "https://registry.npmmirror.com/crypt/-/crypt-0.0.2.tgz#88d7ff7ec0dfb86f713dc87bbb42d044d3e6c41b"
   integrity sha512-mCxBlsHFYh9C+HVpiEacem8FEBnMXgU9gy4zmNC+SXAZNB/1idgp/aulFJ4FgCi7GPEVbfyng092GqL2k2rmow==
+
+crypto-js@^4.1.1:
+  version "4.1.1"
+  resolved "https://registry.npmmirror.com/crypto-js/-/crypto-js-4.1.1.tgz#9e485bcf03521041bd85844786b83fb7619736cf"
+  integrity sha512-o2JlM7ydqd3Qk9CA0L4NL6mTzU2sdx96a+oOfPu8Mkl/PK51vSyoi8/rQ8NknZtk44vq15lmhAj9CIAGwgeWKw==
 
 crypto-random-string@^1.0.0:
   version "1.0.0"
