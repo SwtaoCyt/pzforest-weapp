@@ -9,12 +9,13 @@
     "enhance": false,
     "compileHotReLoad": false,
     "postcss": false,
-    "minified": false,
+    "minified": true,
     "babelSetting": {
       "ignore": [],
       "disablePlugins": [],
       "outputPath": ""
-    }
+    },
+    "condition": false
   },
   "compileType": "miniprogram",
   "libVersion": "2.30.4",

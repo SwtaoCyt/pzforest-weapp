@@ -14,6 +14,7 @@ const NutUIResolver = () => {
 };
 
 const config = {
+  lazyCodeLoading: "requiredComponents",
   alias: {
     "@/components": path.resolve("", "src/components"),
     "@/apis": path.resolve("..", "src/apis"),
