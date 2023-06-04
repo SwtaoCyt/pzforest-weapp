@@ -14,6 +14,11 @@ const NutUIResolver = () => {
 };
 
 const config = {
+  build: {
+    css: {
+      extract: true,
+    },
+  },
   lazyCodeLoading: "requiredComponents",
   alias: {
     "@/components": path.resolve("", "src/components"),

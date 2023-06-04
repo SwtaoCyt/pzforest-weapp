@@ -37,8 +37,8 @@
   "license": "MIT",
   "dependencies": {
     "@babel/runtime": "^7.7.7",
-    "@nutui/icons-vue-taro": "^0.0.8",
-    "@nutui/nutui-taro": "^4.0.0",
+    "@nutui/icons-vue-taro": "^0.0.9",
+    "@nutui/nutui-taro": "^4.0.7",
     "@tarojs/components": "3.5.10",
     "@tarojs/helper": "3.5.10",
     "@tarojs/plugin-framework-vue3": "3.5.10",
@@ -55,6 +55,7 @@
     "@tarojs/taro": "3.5.10",
     "@tarojs/taro-h5": "3.5.10",
     "crypto-js": "^4.1.1",
+    "version": "^0.1.2",
     "vue": "^3.0.0"
   },
   "devDependencies": {

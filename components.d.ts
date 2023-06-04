@@ -8,9 +8,14 @@ export {}
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     Hello: typeof import('./src/components/hello.vue')['default']
+    List: typeof import('./src/components/list.vue')['default']
+    Listitem: typeof import('./src/components/listitem.vue')['default']
     NutButton: typeof import('@nutui/nutui-taro')['Button']
+    NutCollapse: typeof import('@nutui/nutui-taro')['Collapse']
+    NutCollapseItem: typeof import('@nutui/nutui-taro')['CollapseItem']
     NutGrid: typeof import('@nutui/nutui-taro')['Grid']
     NutGridItem: typeof import('@nutui/nutui-taro')['GridItem']
+    NutPopup: typeof import('@nutui/nutui-taro')['Popup']
     NutStep: typeof import('@nutui/nutui-taro')['Step']
     NutSteps: typeof import('@nutui/nutui-taro')['Steps']
     NutSwiper: typeof import('@nutui/nutui-taro')['Swiper']
@@ -21,6 +26,5 @@ declare module '@vue/runtime-core' {
     NutTabs: typeof import('@nutui/nutui-taro')['Tabs']
     NutTextarea: typeof import('@nutui/nutui-taro')['Textarea']
     NutToast: typeof import('@nutui/nutui-taro')['Toast']
-    Swiper: typeof import('./src/components/swiper.vue')['default']
   }
 }

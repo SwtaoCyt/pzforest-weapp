@@ -14,32 +14,43 @@
   <view class="index">
     {{ msg }} <Dongdong />
     <view class="btn">
-      <nut-button type="success" @click="handleLogin()">授权登录</nut-button>
-      <nut-button type="success" @click="handleGet()">获取用户信息</nut-button>
-      <nut-button open-type="getPhoneNumber" @getphonenumber="getphonenumber"
-        >获取用户手机</nut-button
-      >
+      <button type="primary" @click="handleLogin()">授权登录</button>
+      <button type="success" @click="handleGet()">获取用户信息</button>
+      <button open-type="getPhoneNumber" @getphonenumber="getphonenumber">
+        获取用户手机
+      </button>
     </view>
     <nut-toast :msg="msg2" v-model:visible="show" :type="type" :cover="cover" />
   </view>
+
+  <listitem></listitem>
 </template>
 
 <script >
-import { reactive, toRefs } from "vue";
+import { onMounted, reactive, toRefs } from "vue";
 import { Dongdong, Home, Search } from "@nutui/icons-vue-taro";
 import Hello from "@/components/hello.vue";
+
 import Taro from "@tarojs/taro";
 import { base64ToArrayBuffer } from '@tarojs/taro';
 import CryptoJS from 'crypto-js';
+
+
+import Listitem from '@/components/listitem.vue';
 export default {
   name: "Index",
   components: {
     Dongdong,
     Hello,
     Home,
-    Search
+    Search,
+
+    Listitem
   },
   setup () {
+    onMounted(() => {
+      handleLogin()
+    });
     const sendWeibo = () => {
       console.log("hahaah");
       Taro.navigateTo({ url: '/pages/send/index' })
@@ -76,6 +87,7 @@ export default {
           var session_key = Taro.getStorageSync("session_key");
           const decryptedData = decryptData(session_key, encryptedData, iv);
           console.log(decryptedData);
+
         },
       });
     };
@@ -99,14 +111,13 @@ export default {
 
       // 将解密后的数据转成字符串
       const decryptedStr = decryptedData.toString(CryptoJS.enc.Utf8);
-      console.log(decryptedData);
-      console.log(decryptedStr);
+
       // 返回解密后的数据
       return decryptedStr;
     }
     const handleLogin = async () => {
       const { code } = await Taro.login();
-      console.log(code);
+
       const { data } = await Taro.request({
         url: "http://localhost:8080/user/login",
         method: "POST",
@@ -115,9 +126,13 @@ export default {
         },
       });
 
-      console.log(data);
-      Taro.clearStorageSync("session_key", data.data)
-      Taro.setStorageSync("session_key", data.data);
+      console.log(data.data.openid);
+      //将登录后获取的openid和session_key保存
+      Taro.clearStorageSync("openid")
+      Taro.clearStorageSync("session_key")
+      Taro.setStorageSync("openid", data.data.openid)
+
+      Taro.setStorageSync("session_key", data.data.session_key);
     };
     const handleClick = (type, msg, cover = false) => {
       state.show = true;
