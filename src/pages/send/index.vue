@@ -136,41 +136,47 @@ export default {
           ctx.font = `${fontSize}px sans-serif`;
           ctx.setTextAlign("center");
           ctx.fillStyle = "#000";
+
+          // 遍历数组，并绘制
           for (let i = 0; i < textLines.length; i++) {
-            let textLine = textLines[i];
-            const textHeight = lineHeight;
-            let words = textLine.split(" ");
-            console.log(words);
+            let line = textLines[i];
+            let lineWidth = ctx.measureText(line).width;
 
-            let line = "";
-            for (let n = 0; n < words.length; n++) {
-              let testLine = line + words[n] + " ";
-              let metrics = ctx.measureText(testLine);
-              console.log(metrics);
-              console.log(metrics.width);
-              console.log(textWidth);
-
-              let testWidth = metrics.width;
-              if (testWidth > textWidth && n > 0) {
-                console.log("哈哈哈");
-
-                ctx.fillText(
-                  line,
-                  canvasWidth.value / 2,
-                  y + padding + textHeight / 2
-                );
-                line = words[n] + " ";
-                y += textHeight;
-              } else {
-                line = testLine;
+            if (lineWidth <= textWidth) {
+              // 如果该行文字宽度小于画布宽度，直接绘制
+              ctx.fillText(
+                line,
+                canvasWidth.value / 2,
+                y + padding + lineHeight / 2
+              );
+              y += lineHeight;
+            } else {
+              // 如果该行文字宽度大于画布宽度，拆分为多行绘制
+              let words = line.split("");
+              let currLine = "";
+              for (let n = 0; n < words.length; n++) {
+                let testLine = currLine + words[n];
+                let testWidth = ctx.measureText(testLine).width;
+                if (testWidth > textWidth) {
+                  ctx.fillText(
+                    currLine,
+                    canvasWidth.value / 2,
+                    y + padding + lineHeight / 2
+                  );
+                  y += lineHeight;
+                  currLine = words[n];
+                } else {
+                  currLine = testLine;
+                }
               }
+              // 绘制剩余部分
+              ctx.fillText(
+                currLine,
+                canvasWidth.value / 2,
+                y + padding + lineHeight / 2
+              );
+              y += lineHeight;
             }
-            ctx.fillText(
-              line,
-              canvasWidth.value / 2,
-              y + padding + textHeight / 2
-            );
-            y += textHeight;
           }
         }
 

@@ -11,11 +11,16 @@ declare module '@vue/runtime-core' {
     NutButton: typeof import('@nutui/nutui-taro')['Button']
     NutGrid: typeof import('@nutui/nutui-taro')['Grid']
     NutGridItem: typeof import('@nutui/nutui-taro')['GridItem']
+    NutStep: typeof import('@nutui/nutui-taro')['Step']
+    NutSteps: typeof import('@nutui/nutui-taro')['Steps']
     NutSwiper: typeof import('@nutui/nutui-taro')['Swiper']
     NutSwiperItem: typeof import('@nutui/nutui-taro')['SwiperItem']
+    NutTabbar: typeof import('@nutui/nutui-taro')['Tabbar']
+    NutTabbarItem: typeof import('@nutui/nutui-taro')['TabbarItem']
+    NutTabPane: typeof import('@nutui/nutui-taro')['TabPane']
+    NutTabs: typeof import('@nutui/nutui-taro')['Tabs']
     NutTextarea: typeof import('@nutui/nutui-taro')['Textarea']
     NutToast: typeof import('@nutui/nutui-taro')['Toast']
     Swiper: typeof import('./src/components/swiper.vue')['default']
-    Test: typeof import('./src/pages/test/index.vue')['default']
   }
 }
