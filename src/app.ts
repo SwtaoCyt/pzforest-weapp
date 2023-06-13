@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import './app.scss'
-import {Grid, GridItem,Pagination,Sticky, Tabs, TabPane,Popup ,Collapse, CollapseItem,Notify ,List  ,Comment,Button   } from '@nutui/nutui-taro'
+import {Grid, GridItem,Pagination,Sticky, Tabs, TabPane,Popup ,Collapse, CollapseItem,Notify ,List  ,Comment,Button     } from '@nutui/nutui-taro'
+
 
 const App = createApp({
   onShow (options) {},

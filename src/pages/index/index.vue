@@ -1,6 +1,6 @@
 
 <template>
-  <hello></hello>
+  <!-- <hello></hello> -->
 
   <nut-grid :column-num="2">
     <nut-grid-item text="投稿" @click="sendWeibo()">
@@ -12,14 +12,14 @@
   </nut-grid>
 
   <view class="index">
-    {{ msg }} <Dongdong />
-    <view class="btn">
+    <!-- {{ msg }} <Dongdong /> -->
+    <!-- <view class="btn">
       <button type="primary" @click="handleLogin()">授权登录</button>
       <button type="success" @click="handleGet()">获取用户信息</button>
       <button open-type="getPhoneNumber" @getphonenumber="getphonenumber">
         获取用户手机
       </button>
-    </view>
+    </view> -->
     <nut-toast :msg="msg2" v-model:visible="show" :type="type" :cover="cover" />
   </view>
 
@@ -50,6 +50,7 @@ export default {
   setup () {
     onMounted(() => {
       handleLogin()
+
     });
     const sendWeibo = () => {
       console.log("hahaah");

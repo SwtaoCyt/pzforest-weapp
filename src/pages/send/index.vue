@@ -105,31 +105,47 @@ export default {
   setup() {
     onMounted(() => {});
     const submit = () => {
+      let TEXTINIMG = 1;
+      let NOTEXT = 1;
+      let INEEDTEXT = 0;
       //多张图片且有文字(默认文字已经写进图片，所以不会将文字独立出来)
-      if (images.value.length > 1 && state.text != "") {
+      if (images.value.length > 1) {
         drawImageOnCanvas(0).finally(() => {
-          contribute(state.pic, "");
+          console.log("多图且有文字");
+
+          contribute(state.pic, state.text, TEXTINIMG);
         });
       }
 
       //仅有一张图片和文字
       if (images.value.length == 1 && state.text != "") {
+        console.log("仅有一张图片和文字");
+
         Taro.getImageInfo({
           src: images.value[0],
           success: (res) => {
-            contribute(res.path, state.text);
+            contribute(res.path, state.text, INEEDTEXT);
           },
         });
       }
       //如果仅有文字
       if (images.value.length == 0 && state.text != "") {
-        contribute(undefined, state.text);
+        if (state.text.length > 150) {
+          console.log("仅文字，文字>150");
+          contribute(state.pic, state.text, TEXTINIMG);
+        } else {
+          console.log("仅文字，文字<150");
+          contribute(undefined, state.text, INEEDTEXT);
+        }
       }
+      //一张图片和无文字
       if (images.value.length == 1 && state.text == "") {
+        console.log("一张图片和无文字");
+
         Taro.getImageInfo({
           src: images.value[0],
           success: (res) => {
-            contribute(res.path, "");
+            contribute(res.path, "", NOTEXT);
           },
         });
       }
@@ -151,7 +167,7 @@ export default {
             duration: 2000,
           });
         } else {
-          if (images.value.length != 0) {
+          if (images.value.length != 0 || state.text.length > 150) {
             drawImageOnCanvas(0);
             state.iwantpreview = "点击预览图片";
           }
