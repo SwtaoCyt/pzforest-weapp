@@ -112,6 +112,25 @@ export const loginToStudy=(userName,passWord,verifyCode)=>{
 export const test = () => {
   console.log("hello");
 };
+
+// 提交问题反馈
+export const submitFeedback = (content: string, contact: string) => {
+  const header = getHeader();
+  return new Promise((resolve, reject) => {
+    Taro.request({
+      url: `${API_ROOT}/feedback/submit`,
+      method: 'POST',
+      header: { ...header, 'content-type': 'application/json' },
+      data: {
+        openid: Taro.getStorageSync('loginId'),
+        content,
+        contact,
+      },
+      success: (res) => resolve(res.data),
+      fail: (res) => reject(res.errMsg),
+    });
+  });
+};
 export const getMyClass = () => {
   var header = getHeader();
   return new Promise((resolve, reject) => {  // 修改为 reject

@@ -26,14 +26,21 @@
           <view class="post">
             <view class="post__text">{{ item.text }}</view>
             <!-- 图片直接显示在列表里，点击可全屏预览 -->
-            <image
+            <!-- 用 view 容器锁死宽高比，避免 widthFix 在页面重布局时高度被重算塌缩 -->
+            <view
               v-if="item.image"
-              :src="getImageUrl(item.image)"
-              class="post__image"
-              mode="widthFix"
-              :show-menu-by-longpress="true"
-              @click.stop="previewImage(item.image)"
-            />
+              class="post__image-wrap"
+              :style="{ aspectRatio: imgRatios[item.id] || '16 / 9' }"
+            >
+              <image
+                :src="getImageUrl(item.image)"
+                class="post__image"
+                mode="aspectFill"
+                :show-menu-by-longpress="true"
+                @click.stop="previewImage(item.image)"
+                @load="onImageLoad($event, item)"
+              />
+            </view>
             <view class="post__meta">
               <text class="post__time">{{ formatTimeAgo(item.createTime) }}</text>
               <text class="post__count">评论 {{ item.commentsCount }}</text>
@@ -242,6 +249,15 @@ export default {
       return typeof img === 'string' ? img : img.url;
     };
 
+    // 记录每张图片的真实宽高比，用于锁死容器高度，避免 widthFix 重布局塌缩
+    const imgRatios = reactive({});
+    const onImageLoad = (e, item) => {
+      const detail = e && e.detail;
+      if (detail && detail.width && detail.height) {
+        imgRatios[item.id] = `${detail.width} / ${detail.height}`;
+      }
+    };
+
     const previewImage = (url) => {
       const src = getImageUrl(url);
       if (!src) {
@@ -306,6 +322,8 @@ export default {
       wantReply,
       previewImage,
       getImageUrl,
+      onImageLoad,
+      imgRatios,
       onChange,
       formatTimeAgo,
       Comment,
@@ -395,13 +413,22 @@ export default {
   margin-right: 24px;
 }
 
-/* 列表内直接展示的图片 */
+/* 列表内图片容器：用 aspect-ratio 锁死高度，重布局时不再塌缩 */
+.post__image-wrap {
+  width: 100%;
+  margin-top: 16px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #f5f6f8;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* 图片填满容器；容器宽高比即图片真实比例，aspectFill 不会变形 */
 .post__image {
   display: block;
   width: 100%;
-  border-radius: 16px;
-  margin-top: 16px;
-  background: #f5f6f8;
+  height: 100%;
 }
 
 /* 评论区 */

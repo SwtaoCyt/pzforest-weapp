@@ -40,6 +40,17 @@
           </view>
           <ArrowRight2 class="setting-item__arrow" color="#c2c9d6" size="28px" />
         </view>
+
+        <view class="setting-item" @click="showFeedback = true">
+          <view class="setting-item__icon setting-item__icon--orange">
+            <Message color="#ff9f43" size="34px" />
+          </view>
+          <view class="setting-item__body">
+            <view class="setting-item__title">问题反馈</view>
+            <view class="setting-item__desc">遇到问题或建议，告诉我们</view>
+          </view>
+          <ArrowRight2 class="setting-item__arrow" color="#c2c9d6" size="28px" />
+        </view>
       </view>
     </view>
 
@@ -63,6 +74,43 @@
     >
     </nut-dialog>
 
+    <!-- 问题反馈弹窗 -->
+    <nut-popup
+      v-model:visible="showFeedback"
+      position="bottom"
+      closeable
+      round
+      :style="{ height: '72%' }"
+      class="feedback-popup"
+    >
+      <view class="feedback">
+        <view class="feedback__title">问题反馈</view>
+        <view class="feedback__subtitle">请描述你遇到的问题或建议，我们会尽快处理</view>
+        <view class="feedback__field">
+          <nut-textarea
+            v-model="feedbackContent"
+            placeholder="请输入反馈内容…"
+            :max-length="500"
+            class="feedback__textarea"
+          />
+        </view>
+        <view class="feedback__field feedback__field--contact">
+          <nut-input
+            v-model="feedbackContact"
+            placeholder="联系方式（选填，方便我们回复你）"
+            :border="false"
+          />
+        </view>
+        <nut-button
+          block
+          type="primary"
+          class="feedback__submit"
+          :loading="feedbackLoading"
+          @click="onSubmitFeedback"
+        >提交反馈</nut-button>
+      </view>
+    </nut-popup>
+
     <notify ref="notifyRef"></notify>
   </view>
 </template>
@@ -70,17 +118,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { getUser, changeUserName } from "../../services/weibo";
-import { cleanCache } from "../../services/api";
+import { cleanCache, submitFeedback } from "../../services/api";
 import { User } from '@/model/user';
 // @ts-ignore
 import notify from '../../components/notify.vue';
-import { Edit, Del, ArrowRight2 } from '@nutui/icons-vue-taro';
+import { Edit, Del, ArrowRight2, Message } from '@nutui/icons-vue-taro';
 
 const showCleanCacheDialog = ref(false);
 const user = ref<User | null>(null);
 const inputValue = ref('');
 const notifyRef = ref(null);
 const showDialog = ref(false);
+
+// 问题反馈
+const showFeedback = ref(false);
+const feedbackContent = ref('');
+const feedbackContact = ref('');
+const feedbackLoading = ref(false);
 
 const avatarInitial = computed(() => (user.value?.nikename || '同').slice(0, 1));
 
@@ -128,6 +182,27 @@ const onConfirm = () => {
 const onCancel = () => {
   console.log('Cancelled');
   showDialog.value = false;
+};
+
+const onSubmitFeedback = () => {
+  if (!feedbackContent.value.trim()) {
+    triggerNotify('danger', '请先填写反馈内容');
+    return;
+  }
+  feedbackLoading.value = true;
+  submitFeedback(feedbackContent.value.trim(), feedbackContact.value.trim())
+    .then((res: any) => {
+      triggerNotify('success', (res && res.message) || '反馈已提交，谢谢！');
+      feedbackContent.value = '';
+      feedbackContact.value = '';
+      showFeedback.value = false;
+    })
+    .catch(() => {
+      triggerNotify('danger', '提交失败，请稍后重试');
+    })
+    .finally(() => {
+      feedbackLoading.value = false;
+    });
 };
 
 onMounted(() => {
@@ -279,6 +354,10 @@ onMounted(() => {
   background: #ffe9e7;
 }
 
+.setting-item__icon--orange {
+  background: #fff3e0;
+}
+
 .setting-item__body {
   flex: 1;
   min-width: 0;
@@ -303,5 +382,49 @@ onMounted(() => {
 .setting-item__arrow {
   flex-shrink: 0;
   margin-left: 16px;
+}
+
+/* 问题反馈弹窗 */
+.feedback {
+  height: 100%;
+  padding: 56px 40px 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.feedback__title {
+  font-size: 36px;
+  font-weight: 600;
+  color: #2b3245;
+}
+
+.feedback__subtitle {
+  margin-top: 12px;
+  margin-bottom: 32px;
+  font-size: 26px;
+  color: #9aa5b8;
+  line-height: 1.5;
+}
+
+.feedback__field {
+  background: #f5f6f8;
+  border-radius: 20px;
+  padding: 8px 24px;
+  margin-bottom: 24px;
+}
+
+.feedback__field--contact {
+  margin-bottom: 40px;
+}
+
+.feedback__textarea {
+  background: transparent;
+}
+
+.feedback__submit {
+  margin-top: auto;
+  background: linear-gradient(135deg, #5b7cfa, #8b5cf6);
+  border: none;
 }
 </style>

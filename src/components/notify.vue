@@ -70,7 +70,11 @@ defineExpose({
   border-radius: 24px;
   color: #fff;
   box-shadow: 0 12px 32px rgba(31, 38, 55, 0.18);
-  animation: notify-in 0.28s cubic-bezier(0.22, 0.9, 0.35, 1.12);
+  /* 提升为独立 GPU 合成层，避免滑入动画触发整页重绘导致画面跳动/变形 */
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: notify-in 0.28s cubic-bezier(0.22, 0.9, 0.35, 1);
 }
 
 .notify__icon {

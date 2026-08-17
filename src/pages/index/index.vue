@@ -200,6 +200,13 @@ const CACHE_KEYS = {
   SESSION_ID: 'JSESSIONID',
 };
 
+// 放假区间（MM-DD），命中期间禁止课表绑定，避免拉到错误的教务数据。
+// 寒假：春节前后 ~ 2月底；暑假：7月初 ~ 8月底。可按学校实际校历调整。
+const HOLIDAY_RANGES: Array<[string, string]> = [
+  ['01-20', '02-28'], // 寒假
+  ['07-01', '08-31'], // 暑假
+];
+
 // 响应式数据
 const schedules = ref<Schedule[]>([]);
 const verifyCodeUrl = ref<string>('');
@@ -253,6 +260,13 @@ const isNewWeek = (): boolean => {
     console.error('检查周期失败:', error);
     return true;
   }
+};
+
+// 是否处于放假区间：当前月日落在任一 HOLIDAY_RANGES 区间内即视为假期
+const isHoliday = (): boolean => {
+  const now = new Date();
+  const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return HOLIDAY_RANGES.some(([start, end]) => md >= start && md <= end);
 };
 
 const getTimeDifference = (courseTime: string): number => {
@@ -466,7 +480,13 @@ const handleCheckMyClass = async (): Promise<void> => {
     // 标记为已绑定但没拉到数据，多半是网络问题，提示重试而不是让重新绑定
     triggerNotify('warning', '课表加载失败，请稍后重试');
   } else {
-    // 数据库里也没有课表，确实未绑定，弹出登录
+    // 数据库里也没有课表，确实未绑定
+    // 放假期间禁止绑定：避免拉到错误的教务课表数据
+    if (isHoliday()) {
+      triggerNotify('warning', '放假期间暂不开放课表绑定，开学后再来绑定吧~');
+      return;
+    }
+    // 非假期，弹出登录绑定
     verifyCodeView.value = true;
     await updateVerifyCode();
   }
