@@ -63,10 +63,17 @@ export const useUserStore = defineStore('user', {
       this.tokenName = '';
       this.tokenValue = '';
       this.isWeChatLoggedIn = false;
+      this.isSchoolLoggedIn = false;
 
       try {
         Taro.removeStorageSync(CACHE_KEYS.TOKEN_NAME);
         Taro.removeStorageSync(CACHE_KEYS.TOKEN_VALUE);
+        Taro.removeStorageSync(CACHE_KEYS.SCHOOL_LOGIN);
+        // 清理 api.ts 里直接写入的身份 / 课表缓存，避免换账号后串数据
+        Taro.removeStorageSync('loginId');
+        Taro.removeStorageSync('JSESSIONID');
+        Taro.removeStorageSync('myClass');
+        Taro.removeStorageSync('myClassDate');
       } catch (error) {
         console.error('Failed to remove token from storage', error);
       }

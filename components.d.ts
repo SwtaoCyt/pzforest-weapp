@@ -7,7 +7,6 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
-    ClassLogin: typeof import('./src/components/classLogin.vue')['default']
     Listitem: typeof import('./src/components/listitem.vue')['default']
     Notify: typeof import('./src/components/notify.vue')['default']
     NutButton: typeof import('@nutui/nutui-taro')['Button']

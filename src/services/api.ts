@@ -1,8 +1,4 @@
 import Taro from "@tarojs/taro";
-import { rejects } from "assert";
-import { resolve } from "path";
-import { encodeInp } from "../utils/encode"
-import { log } from "console";
 
 // https://pzforest.com
 export const  API_ROOT="https://pzforest.com"
@@ -167,9 +163,6 @@ export const getLoginId = ()=>{
           header:header,
           url:API_ROOT + "/user/getLoginIdAsString",
           method: "GET",
-          data:{
-            "token":Taro.getStorageSync("toekn")
-          },
           success:(res)=>{
             console.log(res);
             Taro.setStorageSync("loginId",res.data)
@@ -243,9 +236,6 @@ export const getClassVerifyCode = ()=>{
     Taro.request({
       url:API_ROOT + "/class/getClassVerifyCode",
       method: "GET",
-      data:{
-        "token":Taro.getStorageSync("toekn")
-      },
       success:(res)=>{
         resolve(res.data)
       },

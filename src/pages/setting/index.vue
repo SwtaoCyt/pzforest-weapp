@@ -85,8 +85,13 @@ const showDialog = ref(false);
 const avatarInitial = computed(() => (user.value?.nikename || '同').slice(0, 1));
 
 const onConfirmClean = () => {
-  cleanCache();
-  triggerNotify("success", "清除成功！");
+  cleanCache()
+    .then(() => {
+      triggerNotify("success", "清除成功！");
+    })
+    .catch(() => {
+      triggerNotify("danger", "清除失败，请稍后重试");
+    });
 };
 
 /**
@@ -111,6 +116,10 @@ const onConfirm = () => {
     changeUserName(inputValue.value).then(res => {
       console.log(res);
       triggerNotify("success", res.message);
+      // 同步本地昵称，避免界面还显示旧名字
+      if (user.value) {
+        user.value.nikename = inputValue.value;
+      }
     });
   }
   showDialog.value = false;

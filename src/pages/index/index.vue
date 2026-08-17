@@ -206,7 +206,7 @@ const verifyCodeUrl = ref<string>('');
 const verifyCodeView = ref(false);
 const classView = ref(false);
 const isLoading = ref(false);
-const currentDay = ref(String(new Date().getDay()));
+const currentDay = ref(String(new Date().getDay() === 0 ? 7 : new Date().getDay()));
 const weekCourses = ref<Schedule[]>([]);
 const notifyRef = ref(null);
 
@@ -231,7 +231,7 @@ const tableColumns = ref([
 ]);
 
 // 工具函数
-const getDayOfWeek = (day: number): string => WEEK_DAYS[day];
+const getDayOfWeek = (day: number): string => WEEK_DAYS[day === 7 ? 0 : day];
 
 const isNewWeek = (): boolean => {
   try {
@@ -244,7 +244,7 @@ const isNewWeek = (): boolean => {
     const timeDiff = now.getTime() - lastUpdate.getTime();
     const daysDiff = timeDiff / (1000 * 3600 * 24);
 
-    if (daysDiff > 7) return true;
+    if (daysDiff >= 7) return true;
 
     const nowWeekday = now.getDay();
 
@@ -349,6 +349,8 @@ const handleWeChatLogin = async (): Promise<void> => {
       userStore.login(tokenName, tokenValue);
       await getLoginId();
       await loadSchedules();
+    } else {
+      triggerNotify('danger', '微信登录失败，请重试');
     }
   } catch (error) {
     console.error('微信登录失败:', error);
@@ -456,8 +458,9 @@ const handleCheckMyClass = async (): Promise<void> => {
 
   if (schedules.value && schedules.value.length > 0) {
     const today = new Date().getDay();
-    updateWeekCourses(String(today));
-    currentDay.value = String(today);
+    const paneKey = String(today === 0 ? 7 : today);
+    updateWeekCourses(paneKey);
+    currentDay.value = paneKey;
     classView.value = true;
   } else if (userStore.isSchoolLoggedIn) {
     // 标记为已绑定但没拉到数据，多半是网络问题，提示重试而不是让重新绑定

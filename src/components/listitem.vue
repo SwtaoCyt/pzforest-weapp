@@ -25,11 +25,26 @@
         <template v-slot:title>
           <view class="post">
             <view class="post__text">{{ item.text }}</view>
+            <!-- 图片直接显示在列表里，点击可全屏预览 -->
+            <image
+              v-if="item.image"
+              :src="getImageUrl(item.image)"
+              class="post__image"
+              mode="widthFix"
+              :show-menu-by-longpress="true"
+              @click.stop="previewImage(item.image)"
+            />
             <view class="post__meta">
               <text class="post__time">{{ formatTimeAgo(item.createTime) }}</text>
               <text class="post__count">评论 {{ item.commentsCount }}</text>
-              <text v-if="item.image" class="post__img" @click.stop="previewImage(item.image)">查看图片</text>
             </view>
+          </view>
+        </template>
+
+        <!-- 折叠箭头：有评论才显示，0 评论的帖子不显示箭头（没有可展开的内容） -->
+        <template v-slot:icon>
+          <view v-if="item.commentsCount > 0" class="post__arrow">
+            <text class="post__arrow-glyph">▾</text>
           </view>
         </template>
 
@@ -83,10 +98,18 @@
       :closeable="true"
     >
       <view class="reply">
-        <view class="reply__origin">{{ replyState.state.text }}</view>
+        <view class="reply__title">回复评论</view>
+
+        <!-- 原评论引用块 -->
+        <view class="reply__quote">
+          <text class="reply__quote-label">原评论</text>
+          <text class="reply__quote-text">{{ replyState.state.text }}</text>
+        </view>
+
         <view class="reply__field">
           <nut-input v-model="replyState.state.comment" placeholder="写下你的回复…" :border="false" />
         </view>
+
         <nut-button block type="primary" class="reply__send" @click="reply(replyState.state)">回复</nut-button>
       </view>
     </nut-popup>
@@ -213,14 +236,20 @@ export default {
       }
     );
 
+    // 兼容两种图片结构：对象 { url } 或纯字符串
+    const getImageUrl = (img) => {
+      if (!img) return '';
+      return typeof img === 'string' ? img : img.url;
+    };
+
     const previewImage = (url) => {
-      if (url === null) {
+      const src = getImageUrl(url);
+      if (!src) {
         return;
       }
-      else
-        Taro.previewImage({
-          urls: [url.url],
-        });
+      Taro.previewImage({
+        urls: [src],
+      });
     };
 
     const formatTimeAgo = (time) => {
@@ -247,9 +276,20 @@ export default {
     const onChange = (names) => {
       activeNames.value = names;
       if (names != null && names !== "" && state.commentsList[names] == null) {
-        getComments("", names).then(res => {
-          state.commentsList[names] = res;
-        });
+        // 评论数为 0 的帖子：无需请求，直接标记为空列表，避免一直显示“评论加载中”
+        const item = (state.StatusLists || []).find(s => s.id == names);
+        if (item && item.commentsCount === 0) {
+          state.commentsList[names] = [];
+          return;
+        }
+        getComments("", names)
+          .then(res => {
+            state.commentsList[names] = res;
+          })
+          .catch(() => {
+            // 请求失败也回退为空列表，而不是一直停留在“评论加载中”
+            state.commentsList[names] = [];
+          });
       }
     };
 
@@ -265,6 +305,7 @@ export default {
       ...toRefs(state),
       wantReply,
       previewImage,
+      getImageUrl,
       onChange,
       formatTimeAgo,
       Comment,
@@ -302,6 +343,26 @@ export default {
   overflow: hidden;
 }
 
+/* 折叠箭头：浅色柔和圆，有评论才显示（模板里按 commentsCount 判断） */
+.feed .post__arrow {
+  width: 44px;
+  height: 44px;
+  margin-left: 16px;
+  border-radius: 50%;
+  background: #eef1ff;
+  border: 2px solid rgba(91, 124, 250, 0.12);
+  color: #5b7cfa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feed .post__arrow-glyph {
+  font-size: 24px;
+  line-height: 1;
+}
+
 /* 帖子标题 */
 .post {
   width: 100%;
@@ -334,8 +395,13 @@ export default {
   margin-right: 24px;
 }
 
-.post__img {
-  color: #5b7cfa;
+/* 列表内直接展示的图片 */
+.post__image {
+  display: block;
+  width: 100%;
+  border-radius: 16px;
+  margin-top: 16px;
+  background: #f5f6f8;
 }
 
 /* 评论区 */
@@ -455,15 +521,44 @@ export default {
 
 /* 回复弹窗 */
 .reply {
-  padding: 48px 32px;
+  height: 100%;
+  padding: 48px 40px 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
-.reply__origin {
+.reply__title {
+  font-size: 34px;
+  font-weight: 600;
+  color: #2b3245;
+  margin-bottom: 28px;
+}
+
+/* 原评论引用块 */
+.reply__quote {
+  background: #f5f7ff;
+  border-left: 6px solid #5b7cfa;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.reply__quote-label {
+  display: block;
+  font-size: 22px;
+  color: #5b7cfa;
+  margin-bottom: 8px;
+}
+
+.reply__quote-text {
+  display: block;
   font-size: 26px;
-  color: #666;
+  color: #6a7284;
   line-height: 1.5;
   word-break: break-all;
-  margin-bottom: 24px;
+  max-height: 120px;
+  overflow: hidden;
 }
 
 .reply__field {
@@ -476,5 +571,6 @@ export default {
 .reply__send {
   background: linear-gradient(135deg, #5b7cfa, #8b5cf6);
   border: none;
+  margin-top: auto;
 }
 </style>

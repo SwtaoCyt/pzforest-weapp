@@ -263,11 +263,12 @@
   };
 
   const handleUploadResult = (res: any) => {
-    if (res && res.code >= 200 && res.code <= 400) {
-      triggerNotify("success", res.message);
-    } else {
-      triggerNotify("danger", res && res.message);
-    }
+    // 2xx 视为成功；400 属于客户端/业务错误，不应误报成功
+    const code = Number(res && res.code);
+    const isSuccess = !isNaN(code) && code >= 200 && code < 300;
+    // 后端 message 可能为空，这里兜底给一条可读文案，避免出现空通知条
+    const message = (res && res.message) || (isSuccess ? "发布成功" : "发布失败，请重试");
+    triggerNotify(isSuccess ? "success" : "danger", message);
     delay(3000).finally(() => {
       Taro.navigateBack();
     });

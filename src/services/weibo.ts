@@ -1,7 +1,6 @@
 import Taro from "@tarojs/taro"
 import {API_ROOT,getHeader} from "../services/api"
 import { User } from "src/model/user";
-import { log } from "console";
 
 
 export const createReply = (cid,id,comment)=>{
@@ -99,9 +98,11 @@ export const getUser = (): Promise<User> => {
  */
 export const getStatus = (text, page, limit) => {
     return new Promise((resolve, reject) => {
+      // 兜底空文本 + 编码，避免把 null / 特殊字符直接拼进 URL
+      const safeText = encodeURIComponent((text || '').trim());
       Taro.request({
         header:getHeader(),
-        url:  API_ROOT + '/weibo/getStatusList?text=' + text + "&page=" + page + "&limit=" + limit,
+        url:  API_ROOT + '/weibo/getStatusList?text=' + safeText + "&page=" + page + "&limit=" + limit,
         method: "GET",
         success: (res) => {
             console.log(res.data.data);
@@ -131,9 +132,10 @@ export const getComments = (accessToken,id)=>{
           },
           method: "GET",
           success: (res) => {
-     
-            
-            resolve(res.data.data);
+            // 后端对空评论可能返回 null/空对象，统一规范成数组，
+            // 避免前端把 null 当“未加载”，导致一直显示“评论加载中”
+            const data = res.data && res.data.data;
+            resolve(Array.isArray(data) ? data : []);
           },
           fail: (error) => {
             reject(error);
@@ -170,7 +172,17 @@ export const getComments = (accessToken,id)=>{
               },
               success: (res) => {
                 console.log(res.data);
-                resolve(res.data); // Resolve with the response data
+                // uploadFile 的 res.data 是字符串（响应原文），需手动 JSON 解析成对象，
+                // 否则上层 handleUploadResult 读不到 res.code / res.message
+                let data = res.data;
+                if (typeof data === 'string') {
+                  try {
+                    data = JSON.parse(data);
+                  } catch (e) {
+                    data = res.data;
+                  }
+                }
+                resolve(data); // Resolve with the response data
               },
               fail: (err) => {
                 console.error(err);

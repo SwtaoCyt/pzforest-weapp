@@ -1,3 +1,4 @@
+import path from 'path';
 import Components from 'unplugin-vue-components/webpack';
 import NutUIResolver from '@nutui/auto-import-resolver';
 
@@ -49,6 +50,9 @@ ignoreOrder: true
           maxEntrypointSize: 512000
         }
       })
+      // pinia 3 -> @vue/devtools-api@7 -> birpc/hookable 引入 .mjs + 可选链，
+      // 小程序端无法解析，且 devtools 在小程序里本来就用不上，这里直接替换成空实现
+      chain.resolve.alias.set('@vue/devtools-api', path.resolve(__dirname, 'devtools-api.stub.js'))
       chain.plugin('unplugin-vue-components').use(Components({
         resolvers: [
           NutUIResolver({

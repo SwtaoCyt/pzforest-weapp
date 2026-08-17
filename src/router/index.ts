@@ -1,14 +1,13 @@
 // router/index.js
 import Taro from '@tarojs/taro'
 
-export const  navigateTo = (url, options)=> {
-
-  url ="/pages/" + url +"/index",
-  console.log(url);
+export const navigateTo = (url, options) => {
+  const fullUrl = "/pages/" + url + "/index";
+  console.log(fullUrl);
   Taro.navigateTo({
-   url,
+    url: fullUrl,
     ...options
-  })
+  });
 }
 
 
