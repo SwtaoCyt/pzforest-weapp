@@ -1,5 +1,4 @@
-import Taro from "@tarojs/taro"
-import { API_ROOT, getHeader } from "./api"
+import { API_ROOT, requestWithAuth } from "./api"
 import { Article } from "src/model/article"
 
 // 后端接口契约（假设，后端就绪后核对）：
@@ -41,48 +40,27 @@ const mockArticles: Article[] = [
 ]
 
 export const getArticleList = (page = 0, limit = 10) => {
-  return new Promise<{ list: Article[]; count: number }>((resolve, reject) => {
-    if (USE_MOCK) {
-      const start = page * limit
-      const list = mockArticles.slice(start, start + limit)
-      resolve({ list, count: mockArticles.length })
-      return
-    }
-    Taro.request({
-      header: getHeader(),
-      url: `${API_ROOT}/article/getArticleList?page=${page}&limit=${limit}`,
-      method: 'GET',
-      success: (res) => {
-        resolve(res.data.data)
-      },
-      fail: (err) => {
-        reject(err)
-      }
-    })
-  })
+  if (USE_MOCK) {
+    const start = page * limit
+    const list = mockArticles.slice(start, start + limit)
+    return Promise.resolve({ list, count: mockArticles.length })
+  }
+  return requestWithAuth({
+    url: `${API_ROOT}/article/getArticleList?page=${page}&limit=${limit}`,
+    method: 'GET',
+  }).then((res) => res.data.data)
 }
 
 export const getArticleDetail = (id: string) => {
-  return new Promise<Article>((resolve, reject) => {
-    if (USE_MOCK) {
-      const found = mockArticles.find(a => a.id === id)
-      if (found) {
-        resolve(found)
-      } else {
-        reject(new Error('article not found'))
-      }
-      return
+  if (USE_MOCK) {
+    const found = mockArticles.find(a => a.id === id)
+    if (found) {
+      return Promise.resolve(found)
     }
-    Taro.request({
-      header: getHeader(),
-      url: `${API_ROOT}/article/getArticleDetail?id=${id}`,
-      method: 'GET',
-      success: (res) => {
-        resolve(res.data.data)
-      },
-      fail: (err) => {
-        reject(err)
-      }
-    })
-  })
+    return Promise.reject(new Error('article not found'))
+  }
+  return requestWithAuth({
+    url: `${API_ROOT}/article/getArticleDetail?id=${id}`,
+    method: 'GET',
+  }).then((res) => res.data.data)
 }

@@ -42,7 +42,7 @@
               />
             </view>
             <view class="post__meta">
-              <text class="post__time">{{ formatTimeAgo(item.createTime) }}</text>
+              <text class="post__time">{{ formatTimeAgo(item.createdTime) }}</text>
               <text class="post__count">评论 {{ item.commentsCount }}</text>
             </view>
           </view>
@@ -177,14 +177,29 @@ export default {
       fetchStatus(null, 0);
     });
 
+    // 评论/回复成功后：刷新该帖评论区 + 评论数 +1（否则只有重进页面才更新）
+    const refreshComments = (id) => {
+      getComments(id).then(res => {
+        state.commentsList[id] = res;
+      });
+      const item = (state.StatusLists || []).find(s => s.id == id);
+      if (item) {
+        item.commentsCount = (item.commentsCount || 0) + 1;
+      }
+    };
+
     const reply = async (replyData) => {
       let cid = replyData.cid;
       let id = replyData.id;
       let comment = replyData.comment;
-      await createReply(cid, id, comment).then((res) => {
+      try {
+        await createReply(cid, id, comment);
         state.showCommentpop = false;
         showNotify("回复成功");
-      });
+        refreshComments(id);
+      } catch (e) {
+        showNotify("回复失败，请重试");
+      }
     };
 
     const search = (content) => {
@@ -210,14 +225,20 @@ export default {
     };
 
     const Comment = (id, content) => {
-      createComment(id, content).then((res) => {
-        showNotify("评论成功！");
-        state.commentValue = "";
-        // 评论成功后立刻刷新该帖评论，让新评论即时出现
-        getComments("", id).then(res => {
-          state.commentsList[id] = res;
+      if (!content || !content.trim()) {
+        showNotify("请输入评论内容");
+        return;
+      }
+      createComment(id, content)
+        .then(() => {
+          showNotify("评论成功！");
+          state.commentValue = "";
+          // 评论成功后立刻刷新该帖评论 + 评论数 +1
+          refreshComments(id);
+        })
+        .catch(() => {
+          showNotify("评论失败，请重试");
         });
-      });
     };
 
     // 通知统一走这里：先关再开（并重建组件清除旧计时器），保证连续触发也能弹出
@@ -292,13 +313,8 @@ export default {
     const onChange = (names) => {
       activeNames.value = names;
       if (names != null && names !== "" && state.commentsList[names] == null) {
-        // 评论数为 0 的帖子：无需请求，直接标记为空列表，避免一直显示“评论加载中”
-        const item = (state.StatusLists || []).find(s => s.id == names);
-        if (item && item.commentsCount === 0) {
-          state.commentsList[names] = [];
-          return;
-        }
-        getComments("", names)
+        // 点击总是拉取评论（不再按 commentsCount===0 跳过——该值是发帖时快照，可能为 0 但实际有评论）
+        getComments(names)
           .then(res => {
             state.commentsList[names] = res;
           })

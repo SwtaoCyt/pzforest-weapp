@@ -1,92 +1,53 @@
 import Taro from "@tarojs/taro"
-import {API_ROOT,getHeader} from "../services/api"
+import {API_ROOT,requestWithAuth,uploadWithAuth} from "../services/api"
 import { User } from "src/model/user";
 
 
 export const createReply = (cid,id,comment)=>{
-  
-    return new Promise((resolve,reject)=>{
-        Taro.request({
-          header:getHeader(),
-            url: API_ROOT+"/weibo/reply",
-            method:"POST",
-            data:{
-                "access_token": undefined,
-                "id": id,
-                "cid":cid,
-                "openid": Taro.getStorageSync("loginId"),
-                "comment":comment
-            },
-            success:(res)=>{
-                resolve(res)
-            }
-            ,fail:(res)=>{
-                reject(res)
-            }
-        })
-    })
+  return requestWithAuth({
+    url: API_ROOT+"/weibo/reply",
+    method:"POST",
+    data:{
+      "id": id,
+      "cid":cid,
+      "comment":comment
+    },
+  });
 }
 
 export const createComment = (id,comment)=>{
-    return new Promise((resolve,reject)=>{
-        Taro.request({
-          header:getHeader(),
-            url: API_ROOT+ "/weibo/createComment",
-            method: "POST",
-            data:{
-                "access_token": undefined,
-                "id": id,
-                "openid": Taro.getStorageSync("loginId"),
-                "comment":comment
-            },
-            success:(res)=>{
-                resolve(res)
-            }
-            ,fail:(res)=>{
-                reject(res)
-            }
-        })
-    })
+    return requestWithAuth({
+      url: API_ROOT+ "/weibo/createComment",
+      method: "POST",
+      data:{
+        "id": id,
+        "comment":comment
+      },
+    });
 }
 export const changeUserName=(nikename :string)=>{
-  return new Promise((resolve, reject) => {
-      Taro.request({
-        header:getHeader(),
-        url: API_ROOT+'/user/changeUserName',
-        method: "POST",
-        data:{
-          "nikename":nikename
-        },
-        success: (res) => {
-          console.log(res);
-          
-          resolve(res.data);
-        },
-        fail: (error) => {
-          reject(error);
-        }
-      });
-    });
+  return requestWithAuth({
+    url: API_ROOT+'/user/changeUserName',
+    method: "POST",
+    data:{
+      "nikename":nikename
+    },
+  }).then((res)=>{
+    console.log(res);
+    return res.data;
+  });
 }
 
 export const getUser = (): Promise<User> => {
-  return new Promise<User>((resolve, reject) => {
-    Taro.request({
-      header: getHeader(),
-      url: `${API_ROOT}/user/getUser`,
-      method: 'POST',
-      success: (res) => {
-        console.log(res);
-        if (res.statusCode === 200 && res.data) {
-          resolve(res.data as User);
-        } else {
-          reject(new Error('Failed to fetch user data'));
-        }
-      },
-      fail: (error) => {
-        reject(error);
-      },
-    });
+  return requestWithAuth({
+    url: `${API_ROOT}/user/getUser`,
+    method: 'POST',
+  }).then((res) => {
+    console.log(res);
+    if (res.statusCode === 200 && res.data) {
+      return res.data as User;
+    }
+    throw new Error('Failed to fetch user data');
   });
 };
 /**
@@ -97,52 +58,35 @@ export const getUser = (): Promise<User> => {
  * @returns 
  */
 export const getStatus = (text, page, limit) => {
-    return new Promise((resolve, reject) => {
-      // 兜底空文本 + 编码，避免把 null / 特殊字符直接拼进 URL
-      const safeText = encodeURIComponent((text || '').trim());
-      Taro.request({
-        header:getHeader(),
-        url:  API_ROOT + '/weibo/getStatusList?text=' + safeText + "&page=" + page + "&limit=" + limit,
-        method: "GET",
-        success: (res) => {
-            console.log(res.data.data);
-            
-          resolve(res.data.data);
-        },
-        fail: (error) => {
-          reject(error);
-        }
-      });
+    // 兜底空文本 + 编码，避免把 null / 特殊字符直接拼进 URL
+    const safeText = encodeURIComponent((text || '').trim());
+    return requestWithAuth({
+      url:  API_ROOT + '/weibo/getStatusList?text=' + safeText + "&page=" + page + "&limit=" + limit,
+      method: "GET",
+    }).then((res) => {
+      console.log(res.data.data);
+      return res.data.data;
     });
   }
   /**
    * 根据贴文id获取评论
-   * @param accessToken 暂未启用 
    * @param id 贴文id
    * @returns 
    */
-export const getComments = (accessToken,id)=>{
-    return new Promise((resolve, reject) => {
-        Taro.request({
-          header:getHeader(),
-          url:  API_ROOT +'/weibo/getComments',
-          data:{
-            "access_token": undefined
-            ,"id": id
-          },
-          method: "GET",
-          success: (res) => {
-            // 后端对空评论可能返回 null/空对象，统一规范成数组，
-            // 避免前端把 null 当“未加载”，导致一直显示“评论加载中”
-            const data = res.data && res.data.data;
-            resolve(Array.isArray(data) ? data : []);
-          },
-          fail: (error) => {
-            reject(error);
-          }
-        });
-      });
-    }
+export const getComments = (id)=>{
+    return requestWithAuth({
+      url:  API_ROOT +'/weibo/getComments',
+      data:{
+        "id": id
+      },
+      method: "GET",
+    }).then((res) => {
+      // 后端对空评论可能返回 null/空对象，统一规范成数组，
+      // 避免前端把 null 当“未加载”，导致一直显示“评论加载中”
+      const data = res.data && res.data.data;
+      return Array.isArray(data) ? data : [];
+    });
+  }
 
 /**
  * 投稿
@@ -154,67 +98,40 @@ export const getComments = (accessToken,id)=>{
     export const contribute = (url, text, mode) => {
         return new Promise((resolve, reject) => {
           console.log(url);
-      
+
           if (url !== undefined) {
             console.log("has url");
-      
-            Taro.uploadFile({
-              header:getHeader(),
+            // uploadWithAuth 已处理 JSON 解析与 401 自动重登
+            uploadWithAuth({
               url:  API_ROOT+'/weibo/sendStatus',
               filePath: url,
               name: 'file',
               formData: {
-                accessToken: null,
-                sessionId: Taro.getStorageSync("session_key"),
-                openid: Taro.getStorageSync("loginId"),
                 text: text,
                 mode: mode
               },
-              success: (res) => {
-                console.log(res.data);
-                // uploadFile 的 res.data 是字符串（响应原文），需手动 JSON 解析成对象，
-                // 否则上层 handleUploadResult 读不到 res.code / res.message
-                let data = res.data;
-                if (typeof data === 'string') {
-                  try {
-                    data = JSON.parse(data);
-                  } catch (e) {
-                    data = res.data;
-                  }
-                }
-                resolve(data); // Resolve with the response data
-              },
-              fail: (err) => {
-                console.error(err);
-                reject(err); // Reject with the error object
-              }
+            }).then(resolve).catch((err) => {
+              console.error(err);
+              reject(err);
             });
           } else {
             console.log("no url");
-      
-            Taro.request({
-              
+            requestWithAuth({
               url: API_ROOT+ '/weibo/sendStatusForText',
               method: 'POST',
               header: {
-                ...getHeader(),
                 'content-type': 'application/json'
               },
               data: {
-                accessToken: undefined,
-                sessionId: Taro.getStorageSync("session_key"),
-                openid: Taro.getStorageSync("loginId"),
                 text: text,
                 mode: mode
               },
-              success: (res) => {
-                console.log(res.data);
-                resolve(res.data); // Resolve with the response data
-              },
-              fail: (err) => {
-                console.error(err);
-                reject(err); // Reject with the error object
-              }
+            }).then((res) => {
+              console.log(res.data);
+              resolve(res.data);
+            }).catch((err) => {
+              console.error(err);
+              reject(err);
             });
           }
         });

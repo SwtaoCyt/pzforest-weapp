@@ -90,7 +90,7 @@
           <nut-textarea
             v-model="feedbackContent"
             placeholder="请输入反馈内容…"
-            :max-length="500"
+            :max-length="1000"
             class="feedback__textarea"
           />
         </view>
