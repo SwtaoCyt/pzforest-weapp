@@ -49,7 +49,7 @@
             </view>
             <view class="course-card__meta-item">
               <Clock color="#9aa5b8" size="16px" />
-              <text>{{ nextCourse.time }}</text>
+              <text>{{ courseStart(nextCourse.time) }}-{{ courseEnd(nextCourse.time) }}</text>
             </view>
           </template>
           <template v-else-if="nextClassSummary">
@@ -242,7 +242,6 @@ import notify from '../../components/notify.vue';
 import { useUserStore } from '../../stores/user';
 
 // 工具函数和API导入
-import { getCoursesByDay } from '../../utils/utils.js';
 import { navigateTo } from '../../router/index';
 import {
   API_ROOT,
@@ -253,17 +252,19 @@ import {
   getCurrentWeek
 } from "../../services/api";
 
-// 类型定义
+// 类型定义（兼容驼峰与小写）
 interface Schedule {
-  classroom: string;
-  dayofweek: string;
   id: number;
   name: string;
-  semester: string;
-  studentid: string;
-  teacher: string;
   time: string;
   weeks: number;
+  classroom?: string;
+  teacher?: string;
+  semester?: string;
+  studentId?: string;
+  studentid?: string;
+  dayOfWeek?: string;
+  dayofweek?: string;
 }
 
 interface LoginForm {
@@ -319,24 +320,39 @@ const weekDays = ["星期一", "星期二", "星期三", "星期四", "星期五
 // 工具函数
 const getDayOfWeek = (day: number): string => WEEK_DAYS[day === 7 ? 0 : day];
 
+const getCourseDayOfWeek = (course: Schedule): string => {
+  return course.dayOfWeek || course.dayofweek || '';
+};
+
 // 今天的 tab 索引（周一=1 … 周日=7）
 const todayIndex = (): string => String(new Date().getDay() === 0 ? 7 : new Date().getDay());
 
-// 判断课程是否在指定周开课（weeks 为位掩码，第 n 周对应 1 << (n - 1)）
-const isCourseInWeek = (course: Schedule, week: number): boolean => {
-  if (!course) return false;
-  if (!week || week <= 0 || !course.weeks) return true; // 未获取到教学周或无周次限制时默认展示
-  return (course.weeks & (1 << (week - 1))) !== 0;
+// 从数据库格式如 "第五节课 14:20-15:05" 或 "14:20-15:05" 中精准提取开始/结束时间
+const courseStart = (time: string): string => {
+  if (!time) return '';
+  const match = time.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  return match ? match[1] : '';
 };
 
-// "08:00-09:40" -> 分钟数
+const courseEnd = (time: string): string => {
+  if (!time) return '';
+  const match = time.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  return match ? match[2] : '';
+};
+
+// "14:20" -> 分钟数
 const parseMinutes = (t: string): number => {
+  if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 };
 
-const courseStart = (time: string): string => (time ? time.split('-')[0].trim() : '');
-const courseEnd = (time: string): string => (time ? (time.split('-')[1] || '').trim() : '');
+// 判断课程是否在指定周开课（数据库 bitmask 规则：第 1 位对应第 1 周，第 n 位对应第 n 周）
+const isCourseInWeek = (course: Schedule, week: number): boolean => {
+  if (!course) return false;
+  if (!week || week <= 0 || !course.weeks) return true; // 未获取到教学周或无周次限制时默认展示
+  return (course.weeks & (1 << week)) !== 0;
+};
 
 // 课程是否正在上课（仅当天生效）
 const isNowCourse = (course: Schedule): boolean => {
@@ -349,12 +365,12 @@ const isNowCourse = (course: Schedule): boolean => {
   return nowMin >= parseMinutes(start) && nowMin < parseMinutes(end);
 };
 
-// 周次 bitmask -> 可读文案，如 "第1-16周" / "第1-8、10-16周"
+// 周次 bitmask -> 可读文案（例如 65534 -> "第2-16周"）
 const formatWeeks = (mask: number): string => {
   if (!mask) return '';
   const weeks: number[] = [];
-  for (let i = 0; i < 25; i++) {
-    if (mask & (1 << i)) weeks.push(i + 1);
+  for (let i = 1; i <= 25; i++) {
+    if (mask & (1 << i)) weeks.push(i);
   }
   if (!weeks.length) return '';
   const ranges: string[] = [];
@@ -370,6 +386,13 @@ const formatWeeks = (mask: number): string => {
     }
   }
   return '第' + ranges.join('、') + '周';
+};
+
+// 按星期和时间升序排序课程
+const sortCoursesByTime = (list: Schedule[]): Schedule[] => {
+  return [...list].sort((a, b) => {
+    return parseMinutes(courseStart(a.time)) - parseMinutes(courseStart(b.time));
+  });
 };
 
 // 获取本周一零点的日期时间戳
@@ -411,11 +434,13 @@ const todayCourses = computed(() => {
 
   const currentDayOfWeek = getDayOfWeek(new Date(nowTick.value).getDay());
 
-  return schedules.value.filter(course => {
-    const matchDay = course.dayofweek === currentDayOfWeek;
+  const list = schedules.value.filter(course => {
+    const matchDay = getCourseDayOfWeek(course) === currentDayOfWeek;
     const matchWeek = isCourseInWeek(course, currentWeek.value);
     return matchDay && matchWeek;
   });
+
+  return sortCoursesByTime(list);
 });
 
 // 今天正在上课的课程
@@ -496,7 +521,7 @@ const DAY_INDEX: Record<string, number> = {
 };
 const DAY_NAME: Record<number, string> = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六' };
 
-// 计算指定天数偏移后的日期所对应的教学周（中国周历习惯：周一为每周第一天）
+// 计算指定天数偏移后的日期所对应的教学周（周一为每周第一天）
 const getWeekForDayOffset = (baseDate: Date, distDays: number, currentWk: number): number => {
   if (!currentWk || currentWk <= 0) return 0;
   const targetDate = new Date(baseDate.getTime() + distDays * 86400000);
@@ -518,7 +543,8 @@ const nextClass = computed<Schedule | null>(() => {
   for (const c of schedules.value) {
     const start = courseStart(c.time);
     if (!start) continue;
-    const cDay = DAY_INDEX[c.dayofweek];
+    const cDayName = getCourseDayOfWeek(c);
+    const cDay = DAY_INDEX[cDayName];
     if (cDay === undefined) continue;
     const cStart = parseMinutes(start);
 
@@ -543,7 +569,8 @@ const nextClass = computed<Schedule | null>(() => {
     for (const c of schedules.value) {
       const start = courseStart(c.time);
       if (!start) continue;
-      const cDay = DAY_INDEX[c.dayofweek];
+      const cDayName = getCourseDayOfWeek(c);
+      const cDay = DAY_INDEX[cDayName];
       if (cDay === undefined) continue;
       const cStart = parseMinutes(start);
       let dist = (cDay - nowDay + 7) % 7;
@@ -566,7 +593,8 @@ const nextClassSummary = computed<{ name: string; day: string; start: string; cl
   const now = new Date(nowTick.value);
   const nowDay = now.getDay();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const cDay = DAY_INDEX[nc.dayofweek];
+  const cDayName = getCourseDayOfWeek(nc);
+  const cDay = DAY_INDEX[cDayName];
   const cStart = parseMinutes(courseStart(nc.time));
   let dist = (cDay - nowDay + 7) % 7;
   if (dist === 0 && cStart <= nowMin) dist = 7;
@@ -808,10 +836,11 @@ const handleCheckMyClass = async (): Promise<void> => {
 
 const updateWeekCourses = (dayKey: string): void => {
   const dayOfWeek = getDayOfWeek(parseInt(dayKey, 10));
-  const coursesOfDay = getCoursesByDay(schedules.value, dayOfWeek);
+  const coursesOfDay = schedules.value.filter(c => getCourseDayOfWeek(c) === dayOfWeek);
   // 周课表优先过滤出当前教学周有课的课程
   const activeCourses = coursesOfDay.filter((course: Schedule) => isCourseInWeek(course, currentWeek.value));
-  weekCourses.value = activeCourses.length > 0 ? activeCourses : coursesOfDay;
+  const result = activeCourses.length > 0 ? activeCourses : coursesOfDay;
+  weekCourses.value = sortCoursesByTime(result);
 };
 
 const handleTabClick = ({ paneKey }: { paneKey: string }): void => {
