@@ -24,20 +24,20 @@
         <!-- 标题：帖子内容 + 元信息 -->
         <template v-slot:title>
           <view class="post">
-            <view class="post__text">{{ item.text }}</view>
+            <view class="post__text">{{ filterPostText(item.text) }}</view>
             <!-- 图片直接显示在列表里，点击可全屏预览 -->
             <!-- 用 view 容器锁死宽高比，避免 widthFix 在页面重布局时高度被重算塌缩 -->
             <view
               v-if="item.image"
               class="post__image-wrap"
               :style="{ aspectRatio: imgRatios[item.id] || '16 / 9' }"
+              @click.stop="previewImage(item.image)"
             >
               <image
                 :src="getImageUrl(item.image)"
                 class="post__image"
                 mode="aspectFill"
                 :show-menu-by-longpress="true"
-                @click.stop="previewImage(item.image)"
                 @load="onImageLoad($event, item)"
               />
             </view>
@@ -277,7 +277,13 @@ export default {
     // 兼容两种图片结构：对象 { url } 或纯字符串
     const getImageUrl = (img) => {
       if (!img) return '';
-      return typeof img === 'string' ? img : img.url;
+      return typeof img === 'string' ? img : (img.url || img.large || img.original || '');
+    };
+
+    // 过滤微博短链接如 http://t.cn/xxxxxx 或 https://t.cn/xxxxxx
+    const filterPostText = (text) => {
+      if (!text) return '';
+      return text.replace(/https?:\/\/t\.cn\/[a-zA-Z0-9]+/g, '').trim();
     };
 
     // 记录每张图片的真实宽高比，用于锁死容器高度，避免 widthFix 重布局塌缩
@@ -295,6 +301,7 @@ export default {
         return;
       }
       Taro.previewImage({
+        current: src,
         urls: [src],
       });
     };
@@ -349,6 +356,7 @@ export default {
       isReply,
       previewImage,
       getImageUrl,
+      filterPostText,
       onImageLoad,
       imgRatios,
       onChange,
@@ -416,12 +424,9 @@ export default {
 .post__text {
   font-size: 30px;
   color: #2b3245;
-  line-height: 1.5;
+  line-height: 1.6;
   word-break: break-all;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  white-space: pre-wrap;
 }
 
 .post__meta {
