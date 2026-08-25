@@ -278,7 +278,6 @@ const CACHE_KEYS = {
   SCHEDULES: 'myClass',
   SCHEDULE_DATE: 'myClassDate',
   SESSION_ID: 'JSESSIONID',
-  // 未绑定课表（后端返回空）的本地标记，避免 useDidShow 每显示一次首页就打一次后端
   NO_SCHEDULE_TS: 'noScheduleTs',
 };
 
@@ -286,7 +285,6 @@ const CACHE_KEYS = {
 const NO_SCHEDULE_TTL_MIN = 30;
 
 // 放假区间（MM-DD），命中期间禁止课表绑定，避免拉到错误的教务数据。
-// 寒假：春节前后 ~ 2月底；暑假：7月初 ~ 8月底。可按学校实际校历调整。
 const HOLIDAY_RANGES: Array<[string, string]> = [
   ['01-20', '02-28'], // 寒假
   ['07-01', '08-31'], // 暑假
@@ -316,7 +314,6 @@ const loginForm = reactive<LoginForm>({
 });
 
 // 常量数据
-const verifyNotice = ref("请登录您的教务系统以获取课表");
 const weekDays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 
 // 工具函数
@@ -324,6 +321,13 @@ const getDayOfWeek = (day: number): string => WEEK_DAYS[day === 7 ? 0 : day];
 
 // 今天的 tab 索引（周一=1 … 周日=7）
 const todayIndex = (): string => String(new Date().getDay() === 0 ? 7 : new Date().getDay());
+
+// 判断课程是否在指定周开课（weeks 为位掩码，第 n 周对应 1 << (n - 1)）
+const isCourseInWeek = (course: Schedule, week: number): boolean => {
+  if (!course) return false;
+  if (!week || week <= 0 || !course.weeks) return true; // 未获取到教学周或无周次限制时默认展示
+  return (course.weeks & (1 << (week - 1))) !== 0;
+};
 
 // "08:00-09:40" -> 分钟数
 const parseMinutes = (t: string): number => {
@@ -368,6 +372,16 @@ const formatWeeks = (mask: number): string => {
   return '第' + ranges.join('、') + '周';
 };
 
+// 获取本周一零点的日期时间戳
+const getMondayTimestamp = (d: Date): number => {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+};
+
 const isNewWeek = (): boolean => {
   try {
     const lastUpdateStr = Taro.getStorageSync(CACHE_KEYS.SCHEDULE_DATE);
@@ -376,14 +390,8 @@ const isNewWeek = (): boolean => {
     const lastUpdate = new Date(lastUpdateStr);
     const now = new Date();
 
-    const timeDiff = now.getTime() - lastUpdate.getTime();
-    const daysDiff = timeDiff / (1000 * 3600 * 24);
-
-    if (daysDiff >= 7) return true;
-
-    const nowWeekday = now.getDay();
-
-    return nowWeekday === 1 && daysDiff > 0;
+    // 跨过周一零点即视为新的一周
+    return getMondayTimestamp(now) > getMondayTimestamp(lastUpdate);
   } catch (error) {
     console.error('检查周期失败:', error);
     return true;
@@ -397,13 +405,17 @@ const isHoliday = (): boolean => {
   return HOLIDAY_RANGES.some(([start, end]) => md >= start && md <= end);
 };
 
-// 计算属性
+// 计算属性：当前周（如果已知）且当天的课程
 const todayCourses = computed(() => {
   if (!schedules.value.length) return [];
 
   const currentDayOfWeek = getDayOfWeek(new Date(nowTick.value).getDay());
 
-  return schedules.value.filter(course => course.dayofweek === currentDayOfWeek);
+  return schedules.value.filter(course => {
+    const matchDay = course.dayofweek === currentDayOfWeek;
+    const matchWeek = isCourseInWeek(course, currentWeek.value);
+    return matchDay && matchWeek;
+  });
 });
 
 // 今天正在上课的课程
@@ -484,7 +496,7 @@ const DAY_INDEX: Record<string, number> = {
 };
 const DAY_NAME: Record<number, string> = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六' };
 
-// 全周范围内“下一节”课（先比天数，再比开始时间；今天已结束的课视为下周同一天）
+// 全周范围内“下一节”课（结合当前教学周过滤，先比天数，再比开始时间；今天已结束的课视为本周或下周）
 const nextClass = computed<Schedule | null>(() => {
   if (!schedules.value.length) return null;
   const now = new Date(nowTick.value);
@@ -492,7 +504,12 @@ const nextClass = computed<Schedule | null>(() => {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   let best: Schedule | null = null;
   let bestKey = Infinity;
-  for (const c of schedules.value) {
+
+  // 优先过滤出当前教学周开课的课程
+  const activeSchedules = schedules.value.filter(c => isCourseInWeek(c, currentWeek.value));
+  const targetList = activeSchedules.length > 0 ? activeSchedules : schedules.value;
+
+  for (const c of targetList) {
     const start = courseStart(c.time);
     if (!start) continue;
     const cDay = DAY_INDEX[c.dayofweek];
@@ -543,7 +560,7 @@ const cardName = computed<string>(() => {
   return '今天已经没有课程啦！';
 });
 
-// 存储管理 (仅保留课表相关)
+// 存储管理
 const storage = {
   getSchedules(): Schedule[] | null {
     try {
@@ -559,7 +576,6 @@ const storage = {
     try {
       Taro.setStorageSync(CACHE_KEYS.SCHEDULES, data);
       Taro.setStorageSync(CACHE_KEYS.SCHEDULE_DATE, new Date().toISOString());
-      // 成功写入真实课表后，清除“未绑定”标记
       Taro.removeStorageSync(CACHE_KEYS.NO_SCHEDULE_TS);
       return true;
     } catch (error) {
@@ -578,7 +594,6 @@ const storage = {
     }
   },
 
-  // 最近一次拉取结果为空（未绑定）且仍在保鲜期内
   hasRecentEmpty(): boolean {
     try {
       const ts = Taro.getStorageSync(CACHE_KEYS.NO_SCHEDULE_TS);
@@ -642,7 +657,7 @@ const handleSchoolLogin = async (): Promise<void> => {
 
     if (code === 200) {
       userStore.loginSchool();
-      triggerNotify("success", "登陆成功！");
+      triggerNotify("success", "登录成功！");
       verifyCodeView.value = false;
       Object.assign(loginForm, { username: '', password: '', verifyCode: '' });
       await loadSchedules();
@@ -673,40 +688,35 @@ const loadSchedules = async (): Promise<void> => {
       return;
     }
 
-    // 近期已确认未绑定（后端返回空），在保鲜期内直接跳过网络请求，避免每次首页显示都打后端
     if (storage.hasRecentEmpty()) {
       schedules.value = [];
       return;
     }
 
-    // 课表绑定状态以数据库为准，只要微信已登录就尝试拉取；
-    // 拉到了就反向同步本地绑定标记，避免本地标记丢失后被误判为未绑定
     if (userStore.isWeChatLoggedIn) {
-      const response = await getMyClass();
+      const response: any = await getMyClass();
+      const list = Array.isArray(response) ? response : (response?.data && Array.isArray(response.data) ? response.data : null);
 
-      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
-        const fetchedSchedules = response.data as Schedule[];
+      if (list && list.length > 0) {
+        const fetchedSchedules = list as Schedule[];
         schedules.value = fetchedSchedules;
         storage.setSchedules(fetchedSchedules);
         userStore.loginSchool();
       } else {
         schedules.value = [];
         userStore.logoutSchool();
-        // 标记“未绑定”，保鲜期内不再反复请求
         storage.markEmpty();
       }
     }
   } catch (error) {
-    console.warn('静默获取课表未成功（可能未绑定或网络波动）:', error);
-    // 静默失败，不打扰未绑定用户或后台同步中的用户
+    console.warn('静默获取课表未成功:', error);
     schedules.value = [];
     storage.markEmpty();
   }
 };
 
-// 拉取当前教学周（失败静默，不影响主流程）
+// 拉取当前教学周
 const loadCurrentWeek = async (): Promise<void> => {
-  // 已成功加载过则不再重复请求（useDidShow 每次首页显示都会调用）
   if (currentWeek.value && currentWeek.value > 0) return;
   try {
     const data = await getCurrentWeek();
@@ -734,12 +744,10 @@ const updateVerifyCode = async (): Promise<void> => {
 
 // 界面交互方法
 const handleCourseCardClick = (): void => {
-  // 无论卡片展示的是正在上课 / 下一节 / 下次上课，点击都进入课表
   handleCheckMyClass();
 };
 
 const handleCheckMyClass = async (): Promise<void> => {
-  // 先尝试从数据库加载课表（loadSchedules 会反向同步绑定状态）
   if (!schedules.value || schedules.value.length === 0) {
     await loadSchedules();
   }
@@ -751,16 +759,12 @@ const handleCheckMyClass = async (): Promise<void> => {
     currentDay.value = paneKey;
     classView.value = true;
   } else if (userStore.isSchoolLoggedIn) {
-    // 标记为已绑定但没拉到数据，多半是网络问题，提示重试而不是让重新绑定
     triggerNotify('warning', '课表加载失败，请稍后重试');
   } else {
-    // 数据库里也没有课表，确实未绑定
-    // 放假期间禁止绑定：避免拉到错误的教务课表数据
     if (isHoliday()) {
       triggerNotify('warning', '放假期间暂不开放课表绑定，开学后再来绑定吧~');
       return;
     }
-    // 非假期，弹出登录绑定
     verifyCodeView.value = true;
     await updateVerifyCode();
   }
@@ -768,7 +772,10 @@ const handleCheckMyClass = async (): Promise<void> => {
 
 const updateWeekCourses = (dayKey: string): void => {
   const dayOfWeek = getDayOfWeek(parseInt(dayKey, 10));
-  weekCourses.value = getCoursesByDay(schedules.value, dayOfWeek);
+  const coursesOfDay = getCoursesByDay(schedules.value, dayOfWeek);
+  // 周课表优先过滤出当前教学周有课的课程
+  const activeCourses = coursesOfDay.filter((course: Schedule) => isCourseInWeek(course, currentWeek.value));
+  weekCourses.value = activeCourses.length > 0 ? activeCourses : coursesOfDay;
 };
 
 const handleTabClick = ({ paneKey }: { paneKey: string }): void => {
@@ -785,20 +792,20 @@ const triggerNotify = (type: string, message: string): void => {
 // 生命周期
 onMounted(async () => {
   userStore.init();
+  await loadCurrentWeek();
   if (!userStore.isWeChatLoggedIn) {
     await handleWeChatLogin();
   } else {
     await loadSchedules();
   }
-  loadCurrentWeek();
 });
 
-useDidShow(() => {
+useDidShow(async () => {
   userStore.init();
+  await loadCurrentWeek();
   if (userStore.isWeChatLoggedIn && (!schedules.value || schedules.value.length === 0)) {
     loadSchedules();
   }
-  loadCurrentWeek();
 });
 </script>
 
