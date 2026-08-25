@@ -43,7 +43,7 @@
             </view>
             <view class="post__meta">
               <text class="post__time">{{ formatTimeAgo(item.createdTime) }}</text>
-              <text class="post__count">评论 {{ item.commentsCount }}</text>
+              <text class="post__count">评论 {{ item.commentsCount || 0 }}</text>
             </view>
           </view>
         </template>
@@ -62,10 +62,12 @@
               v-for="comment in commentsList[item.id]"
               :key="comment.id"
               class="comment"
+              :class="{ 'comment--reply': isReply(comment) }"
               @click="wantReply(comment.id, item.id, comment.text)"
             >
               <view class="comment__head">
-                <text class="comment__name">{{ comment.name }}</text>
+                <text v-if="isReply(comment)" class="comment__tag">回复</text>
+                <text class="comment__name">{{ comment.name }}{{ comment.miniProgram ? '（小程序）' : '' }}</text>
                 <text class="comment__time">{{ formatTimeAgo(comment.createdAt) }}</text>
               </view>
               <text class="comment__text">{{ comment.text }}</text>
@@ -258,6 +260,14 @@ export default {
       replyState.state.text = content;
     };
 
+    // 判断评论是否为"回复"：微博 API 中根评论 rootid 为空/等于自身，回复的 rootid 指向根评论
+    const isReply = (comment) => {
+      const rootid = comment && comment.rootid;
+      if (!rootid) return false;
+      const selfId = String(comment.id != null ? comment.id : comment.idstr);
+      return String(rootid) !== selfId;
+    };
+
     const activeNames = reactive(
       {
         value: ""
@@ -336,6 +346,7 @@ export default {
       activeNames,
       ...toRefs(state),
       wantReply,
+      isReply,
       previewImage,
       getImageUrl,
       onImageLoad,
@@ -468,10 +479,34 @@ export default {
   margin-bottom: 8px;
 }
 
+/* 回复样式：缩进 + 浅色背景，与根评论区分 */
+.comment--reply {
+  margin-left: 28px;
+  padding-left: 20px;
+  border-left: 4px solid #e6e9f0;
+  background: #fafbfd;
+  border-bottom-color: transparent;
+}
+
+.comment__tag {
+  flex-shrink: 0;
+  margin-right: 12px;
+  padding: 2px 12px;
+  font-size: 20px;
+  line-height: 1.4;
+  color: #8b5cf6;
+  background: #f3edff;
+  border-radius: 8px;
+}
+
 .comment__name {
+  flex: 1;
   font-size: 26px;
   font-weight: 600;
   color: #4a5264;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .comment__time {
