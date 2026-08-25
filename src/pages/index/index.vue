@@ -489,14 +489,24 @@ const stopTick = (): void => {
 onMounted(() => { startTick(); });
 onUnmounted(stopTick);
 
-// 星期映射（文案 -> 数字，0=周日）
+// 星期映射（文案 -> 数字，0=周日，1=周一... 6=周六）
 const DAY_INDEX: Record<string, number> = {
   '星期日': 0, '星期一': 1, '星期二': 2, '星期三': 3,
   '星期四': 4, '星期五': 5, '星期六': 6,
 };
 const DAY_NAME: Record<number, string> = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六' };
 
-// 全周范围内“下一节”课（结合当前教学周过滤，先比天数，再比开始时间；今天已结束的课视为本周或下周）
+// 计算指定天数偏移后的日期所对应的教学周（中国周历习惯：周一为每周第一天）
+const getWeekForDayOffset = (baseDate: Date, distDays: number, currentWk: number): number => {
+  if (!currentWk || currentWk <= 0) return 0;
+  const targetDate = new Date(baseDate.getTime() + distDays * 86400000);
+  const baseMonday = getMondayTimestamp(baseDate);
+  const targetMonday = getMondayTimestamp(targetDate);
+  const weekDiff = Math.round((targetMonday - baseMonday) / (7 * 86400000));
+  return currentWk + weekDiff;
+};
+
+// 全周范围内“下一节”课（根据相对天数精准推导目标教学周，完美支持周日晚上看下周一及跨周）
 const nextClass = computed<Schedule | null>(() => {
   if (!schedules.value.length) return null;
   const now = new Date(nowTick.value);
@@ -505,21 +515,47 @@ const nextClass = computed<Schedule | null>(() => {
   let best: Schedule | null = null;
   let bestKey = Infinity;
 
-  // 优先过滤出当前教学周开课的课程
-  const activeSchedules = schedules.value.filter(c => isCourseInWeek(c, currentWeek.value));
-  const targetList = activeSchedules.length > 0 ? activeSchedules : schedules.value;
-
-  for (const c of targetList) {
+  for (const c of schedules.value) {
     const start = courseStart(c.time);
     if (!start) continue;
     const cDay = DAY_INDEX[c.dayofweek];
     if (cDay === undefined) continue;
     const cStart = parseMinutes(start);
+
     let dist = (cDay - nowDay + 7) % 7;
-    if (dist === 0 && cStart <= nowMin) dist = 7;
+    if (dist === 0 && cStart <= nowMin) dist = 7; // 今天已结束的同一星期课，视为 7 天后
+
+    // 精确获取该课程对应目标日期的教学周并进行过滤
+    const targetWeek = getWeekForDayOffset(now, dist, currentWeek.value);
+    if (!isCourseInWeek(c, targetWeek)) {
+      continue;
+    }
+
     const key = dist * 10000 + cStart;
-    if (key < bestKey) { bestKey = key; best = c; }
+    if (key < bestKey) {
+      bestKey = key;
+      best = c;
+    }
   }
+
+  // 兜底策略：如果当前周及紧随周期无匹配课，降级为不限周次选择最近的一节课
+  if (!best) {
+    for (const c of schedules.value) {
+      const start = courseStart(c.time);
+      if (!start) continue;
+      const cDay = DAY_INDEX[c.dayofweek];
+      if (cDay === undefined) continue;
+      const cStart = parseMinutes(start);
+      let dist = (cDay - nowDay + 7) % 7;
+      if (dist === 0 && cStart <= nowMin) dist = 7;
+      const key = dist * 10000 + cStart;
+      if (key < bestKey) {
+        bestKey = key;
+        best = c;
+      }
+    }
+  }
+
   return best;
 });
 
