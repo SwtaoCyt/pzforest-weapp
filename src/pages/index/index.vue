@@ -684,20 +684,23 @@ const loadSchedules = async (): Promise<void> => {
     if (userStore.isWeChatLoggedIn) {
       const response = await getMyClass();
 
-      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
         const fetchedSchedules = response.data as Schedule[];
         schedules.value = fetchedSchedules;
         storage.setSchedules(fetchedSchedules);
         userStore.loginSchool();
       } else {
+        schedules.value = [];
         userStore.logoutSchool();
         // 标记“未绑定”，保鲜期内不再反复请求
         storage.markEmpty();
       }
     }
   } catch (error) {
-    console.error('加载课表失败:', error);
-    triggerNotify('danger', '加载课表失败');
+    console.warn('静默获取课表未成功（可能未绑定或网络波动）:', error);
+    // 静默失败，不打扰未绑定用户或后台同步中的用户
+    schedules.value = [];
+    storage.markEmpty();
   }
 };
 
