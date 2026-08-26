@@ -13,33 +13,38 @@
     <view
       class="course-card"
       :class="{
-        'course-card--empty': !nextCourse && !ongoingCourse,
-        'course-card--ongoing': ongoingCourse
+        'course-card--empty': !nextCourse && !ongoingGroup,
+        'course-card--ongoing': ongoingGroup
       }"
       @click="handleCourseCardClick"
     >
       <view
         class="course-card__icon"
         :class="{
-          'course-card__icon--empty': !nextCourse && !ongoingCourse,
-          'course-card__icon--ongoing': ongoingCourse
+          'course-card__icon--empty': !nextCourse && !ongoingGroup,
+          'course-card__icon--ongoing': ongoingGroup
         }"
       >
-        <Clock v-if="nextCourse || ongoingCourse" color="#5b7cfa" size="36px" />
+        <Clock v-if="nextCourse || ongoingGroup" color="#5b7cfa" size="36px" />
         <Tips v-else color="#ff9f43" size="36px" />
       </view>
       <view class="course-card__info">
-        <view class="course-card__label">{{ ongoingCourse ? '正在上课' : (nextCourse ? '下一节课' : (nextClassSummary ? '下次上课' : '我的课表')) }}</view>
+        <view class="course-card__label">{{ semesterNotStarted ? '新学期' : (ongoingGroup ? '正在上课' : (nextCourse ? '下一节课' : (nextClassSummary ? '下次上课' : '我的课表'))) }}</view>
         <view class="course-card__name">{{ cardName }}</view>
         <view class="course-card__meta">
-          <template v-if="ongoingCourse">
+          <text v-if="semesterNotStarted" class="course-card__tip">8 月 31 日（第 1 周）起自动同步课表</text>
+          <template v-else-if="ongoingGroup">
             <view class="course-card__meta-item">
               <Location color="#9aa5b8" size="16px" />
-              <text>{{ ongoingCourse.classroom }}</text>
+              <text>{{ ongoingGroup.classroom }}</text>
             </view>
             <view class="course-card__meta-item">
               <Clock color="#9aa5b8" size="16px" />
-              <text>{{ courseStart(ongoingCourse.time) }} · 已上 {{ ongoingProgress }}%</text>
+              <text>{{ ongoingGroup.start }} · 已上 {{ ongoingProgress }}%</text>
+            </view>
+            <view v-if="ongoingRemainText" class="course-card__meta-item">
+              <Clock color="#9aa5b8" size="16px" />
+              <text>{{ ongoingRemainText }}</text>
             </view>
           </template>
           <template v-else-if="nextCourse">
@@ -64,14 +69,14 @@
           </template>
           <text v-else class="course-card__tip">早点休息，养精蓄锐～</text>
         </view>
-        <view v-if="ongoingCourse && nextCourse" class="course-card__next">
+        <view v-if="ongoingGroup && nextCourse" class="course-card__next">
           下节：{{ nextCourse.name }} {{ courseStart(nextCourse.time) }}
         </view>
-        <view v-if="ongoingCourse" class="course-card__progress">
+        <view v-if="ongoingGroup" class="course-card__progress">
           <view class="course-card__progress-inner" :style="{ width: ongoingProgress + '%' }"></view>
         </view>
       </view>
-      <ArrowRight v-if="nextCourse || ongoingCourse" class="course-card__arrow" color="#c2c9d6" size="28px" />
+      <ArrowRight v-if="nextCourse || ongoingGroup" class="course-card__arrow" color="#c2c9d6" size="28px" />
     </view>
 
     <!-- 常用功能 -->
@@ -158,21 +163,24 @@
         <view class="schedule__header">
           <view class="schedule__title-row">
             <view class="schedule__title">{{ schedulePopupTitle }}</view>
-          </view>
-          <!-- 周导航：支持浏览整学期任意一周（数据本身就是全学期的） -->
-          <view class="schedule__week-nav">
-            <view
-              class="schedule__week-arrow"
-              :class="{ 'schedule__week-arrow--disabled': !canPrevWeek }"
-              @click="prevWeek"
-            >‹</view>
-            <view class="schedule__week-nav-label">{{ weekNavLabel }}</view>
-            <view
-              class="schedule__week-arrow"
-              :class="{ 'schedule__week-arrow--disabled': !canNextWeek }"
-              @click="nextWeek"
-            >›</view>
-            <view v-if="viewWeekOffset !== 0" class="schedule__week-back" @click="viewWeekOffset = 0">回到本周</view>
+            <!-- 周导航：支持浏览整学期任意一周（数据本身就是全学期的）；点击日期范围回到本周 -->
+            <view class="schedule__week-nav">
+              <view
+                class="schedule__week-arrow"
+                :class="{ 'schedule__week-arrow--disabled': !canPrevWeek }"
+                @click="prevWeek"
+              >‹</view>
+              <view
+                class="schedule__week-nav-label"
+                :class="{ 'schedule__week-nav-label--offset': viewWeekOffset !== 0 }"
+                @click="viewWeekOffset = 0"
+              >{{ weekNavLabel }}</view>
+              <view
+                class="schedule__week-arrow"
+                :class="{ 'schedule__week-arrow--disabled': !canNextWeek }"
+                @click="nextWeek"
+              >›</view>
+            </view>
           </view>
           <view class="schedule__subtitle">{{ currentDayText }}</view>
           <view v-if="todayNextText" class="schedule__next">{{ todayNextText }}</view>
@@ -196,39 +204,65 @@
         </view>
         <view class="schedule-list">
           <view
-            v-for="course in weekCoursesByDay"
-            :key="course.id"
+            v-for="group in courseGroupsByDay"
+            :key="group.key"
             class="course-item"
-            :class="{ 'course-item--now': isNowCourse(course) }"
+            :class="{
+              'course-item--now': group.isNow,
+              'course-item--merged': group.count > 1,
+              'course-item--expanded': group.count > 1 && expandedGroups[group.key]
+            }"
+            @click="group.count > 1 && toggleGroup(group.key)"
           >
             <view class="course-item__time">
-              <text class="course-item__time-start">{{ courseStart(course.time) }}</text>
-              <text class="course-item__time-end">{{ courseEnd(course.time) }}</text>
+              <text class="course-item__time-start">{{ group.start }}</text>
+              <text class="course-item__time-end">{{ group.end }}</text>
             </view>
             <view class="course-item__body">
-              <view class="course-item__name">{{ course.name }}</view>
-              <view class="course-item__meta">
-                <view v-if="course.classroom" class="course-item__meta-item">
-                  <Location2 color="#9aa5b8" size="24px" />
-                  <text>{{ course.classroom }}</text>
-                </view>
-                <view v-if="course.teacher" class="course-item__meta-item">
-                  <People color="#9aa5b8" size="24px" />
-                  <text>{{ course.teacher }}</text>
-                </view>
-                <text v-if="course.weeks" class="course-item__weeks">{{ formatWeeks(course.weeks) }}</text>
+              <view class="course-item__name-row">
+                <text class="course-item__name">{{ group.name }}</text>
+                <text v-if="group.count > 1" class="course-item__merged-tag">
+                  {{ expandedGroups[group.key] ? '收起 ▴' : '连上' + group.count + '节 ▾' }}
+                </text>
               </view>
-              <view v-if="isNowCourse(course)" class="course-item__progress">
-                <view class="course-item__progress-track">
-                  <view class="course-item__progress-inner" :style="{ width: courseProgress(course) + '%' }"></view>
+              <view class="course-item__meta">
+                <view v-if="group.classroom" class="course-item__meta-item">
+                  <Location2 color="#9aa5b8" size="24px" />
+                  <text>{{ group.classroom }}</text>
                 </view>
-                <text class="course-item__progress-text">已上 {{ courseProgress(course) }}%</text>
+                <view v-if="group.teacher" class="course-item__meta-item">
+                  <People color="#9aa5b8" size="24px" />
+                  <text>{{ group.teacher }}</text>
+                </view>
+                <text v-if="group.weeks" class="course-item__weeks">{{ formatWeeks(group.weeks) }}</text>
+              </view>
+              <view v-if="group.isNow" class="course-item__progress">
+                <view class="course-item__progress-track">
+                  <view class="course-item__progress-inner" :style="{ width: group.progress + '%' }"></view>
+                </view>
+                <text class="course-item__progress-text">正在上课 · 已上 {{ group.progress }}%</text>
+              </view>
+              <!-- 连堂展开明细：每节起止 + 课间休息 -->
+              <view v-if="group.count > 1 && expandedGroups[group.key]" class="course-item__detail">
+                <template v-for="(c, idx) in group.courses" :key="c.id">
+                  <view v-if="idx > 0 && group.breaks[idx - 1] > 0" class="course-item__break">
+                    课间休息 {{ group.breaks[idx - 1] }} 分钟
+                  </view>
+                  <view class="course-item__detail-row" :class="{ 'course-item__detail-row--now': isNowCourse(c) }">
+                    <text class="course-item__detail-period">{{ periodName(c.time) }}</text>
+                    <text class="course-item__detail-time">{{ courseStart(c.time) }} - {{ courseEnd(c.time) }}</text>
+                  </view>
+                </template>
               </view>
             </view>
           </view>
-          <view v-if="!weekCoursesByDay.length" class="schedule-empty">
+          <view v-if="!courseGroupsByDay.length" class="schedule-empty">
             <Tips color="#c2c9d6" size="60px" />
-            <view v-if="viewWeekOffset === 0 && currentDay === todayIndex() && nextClassSummary" class="schedule-empty__info">
+            <view v-if="semesterNotStarted" class="schedule-empty__info">
+              <text class="schedule-empty__hint">新学期还没开学</text>
+              <text class="schedule-empty__main">课表将于 8 月 31 日（第 1 周）开放</text>
+            </view>
+            <view v-else-if="viewWeekOffset === 0 && currentDay === todayIndex() && nextClassSummary" class="schedule-empty__info">
               <text class="schedule-empty__hint">今天没课，下次上课</text>
               <text class="schedule-empty__main">{{ nextClassSummary.day }} {{ nextClassSummary.start }} · {{ nextClassSummary.name }}</text>
             </view>
@@ -309,9 +343,6 @@ const HOLIDAY_RANGES: Array<[string, string]> = [
   ['07-01', '08-25'], // 暑假（开学前一周 08-25 解除）
 ];
 
-// [TEST-ONLY] 模拟开学周：强制当前教学周为指定值（1=开学第一周，2=开学第二周…），用于正式开学前的联调测试。
-// 正式发布前务必改回 0（或删除本常量及下方覆盖逻辑），否则线上永远显示固定的周次。
-const TEST_FORCE_WEEK = 2;
 // [TEST-ONLY] 模拟当前时间：用于验证“周日晚上”等跨周场景，格式 'YYYY/MM/DD HH:mm:ss'（iOS 需用斜杠）。
 // 正式发布前务必改回 null，否则页面所有时间相关逻辑都会固定在这个时刻。
 const TEST_FAKE_NOW: string | null = null;
@@ -494,9 +525,13 @@ const isHoliday = (): boolean => {
   return HOLIDAY_RANGES.some(([start, end]) => md >= start && md < end);
 };
 
-// 计算属性：当前周（如果已知）且当天的课程
-const todayCourses = computed(() => {
+// 是否未开学（当前教学周 ≤ 0）：此时课表不展示第 1 周口径的课程，显示"未开学"占位
+const semesterNotStarted = computed(() => currentWeek.value <= 0);
+
+// 计算属性：当前周（如果已知）且当天的课程（按连堂分组）
+const todayGroups = computed(() => {
   if (!schedules.value.length) return [];
+  if (semesterNotStarted.value) return [];
 
   const currentDayOfWeek = getDayOfWeek(new Date(nowTick.value).getDay());
 
@@ -506,44 +541,61 @@ const todayCourses = computed(() => {
     return matchDay && matchWeek;
   });
 
-  return sortCoursesByTime(list);
+  return buildGroups(sortCoursesByTime(list));
 });
 
-// 今天正在上课的课程
-const ongoingCourse = computed<Schedule | null>(() => {
+// 今天正在上课的连堂组（now 落在组首开始 ~ 组末结束之间，课间休息也算）
+const ongoingGroup = computed(() => {
   const nowMin = nowMinutes.value;
-  const course = todayCourses.value.find(c => {
-    const s = parseMinutes(courseStart(c.time));
-    const e = parseMinutes(courseEnd(c.time));
+  return todayGroups.value.find(g => {
+    const s = parseMinutes(g.start);
+    const e = parseMinutes(g.end);
     return s <= nowMin && nowMin < e;
-  });
-  return course || null;
+  }) || null;
 });
 
-// 今天接下来（尚未开始）的第一节课
+// 今天接下来（尚未开始）的下一组课程（连堂中自动跳过当前组内的后续节，取下一门课）
 const nextCourse = computed<Schedule | null>(() => {
-  const upcoming = todayCourses.value
-    .filter(course => parseMinutes(courseStart(course.time)) > nowMinutes.value)
-    .sort((a, b) => parseMinutes(courseStart(a.time)) - parseMinutes(courseStart(b.time)));
-  return upcoming.length ? upcoming[0] : null;
+  const upcoming = todayGroups.value
+    .filter(g => parseMinutes(g.start) > nowMinutes.value)
+    .sort((a, b) => parseMinutes(a.start) - parseMinutes(b.start));
+  const g = upcoming[0];
+  return g ? g.courses[0] : null;
 });
 
-// 进行中课程的进度（0-100），驱动进度条
-const courseProgress = (course: Schedule): number => {
-  const start = parseMinutes(courseStart(course.time));
-  const end = parseMinutes(courseEnd(course.time));
+// 进行中连堂组的进度（0-100）：按组首开始 ~ 组末结束整体计算
+const ongoingProgress = computed(() => {
+  const g = ongoingGroup.value;
+  if (!g) return 0;
+  const start = parseMinutes(g.start);
+  const end = parseMinutes(g.end);
   if (!end || end <= start) return 0;
   const p = Math.round(((nowMinutes.value - start) / (end - start)) * 100);
   return Math.min(100, Math.max(0, p));
-};
+});
 
-const ongoingProgress = computed(() => (ongoingCourse.value ? courseProgress(ongoingCourse.value) : 0));
+// 当前课程（连堂组）剩余时间文案，如"还有 45 分钟结束"
+const ongoingRemainText = computed(() => {
+  const g = ongoingGroup.value;
+  if (!g) return '';
+  const remain = parseMinutes(g.end) - nowMinutes.value;
+  if (remain <= 0) return '即将结束';
+  if (remain < 60) return `还有 ${remain} 分钟结束`;
+  return `还有 ${Math.floor(remain / 60)} 小时 ${remain % 60} 分钟结束`;
+});
 
-// 问候语，根据当前时间动态变化
+// 今天是否有早八（当天最早一节课开始时间 ≤ 09:00）
+const hasEarlyClassToday = computed(() => {
+  if (!todayGroups.value.length) return false;
+  const first = todayGroups.value[0];
+  return parseMinutes(first.start) <= 9 * 60;
+});
+
+// 问候语，根据当前时间动态变化；当天有早八时早间时段给专属文案
 const greeting = computed(() => {
   const hour = fakeNow().getHours();
-  if (hour < 6) return '夜深了';
-  if (hour < 12) return '早上好';
+  if (hour < 6) return hasEarlyClassToday.value ? '夜深了，今天有早八，早点休息' : '夜深了';
+  if (hour < 12) return hasEarlyClassToday.value ? '早上好！今天有早八，记得按时到教室～' : '早上好';
   if (hour < 14) return '中午好';
   if (hour < 18) return '下午好';
   return '晚上好';
@@ -678,7 +730,7 @@ const nextClassSummary = computed<{ name: string; day: string; start: string; cl
 // 弹窗头部“今日”附加行：下节课预告
 const todayNextText = computed<string>(() => {
   if (viewWeekOffset.value !== 0 || currentDay.value !== todayIndex()) return '';
-  if (!todayCourses.value.length) return '今日无课';
+  if (!todayGroups.value.length) return '今日无课';
   const next = nextCourse.value;
   if (next) return `下节：${next.name} ${courseStart(next.time)}${next.classroom ? ' · ' + next.classroom : ''}`;
   return '今日课程已结束';
@@ -686,7 +738,8 @@ const todayNextText = computed<string>(() => {
 
 // 主页课程卡标题文案
 const cardName = computed<string>(() => {
-  if (ongoingCourse.value) return ongoingCourse.value.name;
+  if (semesterNotStarted.value) return '课表 8 月 31 日开放';
+  if (ongoingGroup.value) return ongoingGroup.value.name;
   if (nextCourse.value) return nextCourse.value.name;
   if (nextClassSummary.value) return `下次上课 · ${nextClassSummary.value.name}`;
   return '今天已经没有课程啦！';
@@ -832,9 +885,6 @@ const loadSchedules = async (): Promise<void> => {
       if (list && list.length > 0) {
         const fetchedSchedules = list as Schedule[];
         schedules.value = fetchedSchedules;
-        // [DEBUG] 打印拉取到的课表总量与字段样例
-        console.log('[SCHEDULE] fetched=', fetchedSchedules.length,
-          'sample=', fetchedSchedules.slice(0, 3).map(c => ({ name: c.name, dayofweek: c.dayofweek, dayOfWeek: c.dayOfWeek, weeks: c.weeks })));
         storage.setSchedules(fetchedSchedules);
         userStore.loginSchool();
       } else {
@@ -856,7 +906,6 @@ const loadCurrentWeek = async (): Promise<void> => {
   try {
     const data = await getCurrentWeek();
     currentWeek.value = data.week || 0;
-    if (TEST_FORCE_WEEK > 0) currentWeek.value = TEST_FORCE_WEEK; // [TEST-ONLY] 模拟开学第一天覆盖
     currentSemester.value = data.semester || '';
   } catch (error) {
     console.error('获取当前教学周失败:', error);
@@ -907,31 +956,111 @@ const handleCheckMyClass = async (): Promise<void> => {
   }
 };
 
-// 周课表（弹窗 tab 内容）：按当前选中 tab（currentDay）响应式计算。
+// 中文节次序号解析："第一节课 08:20-09:05" -> 1；非标准节次（如"中午休息时间"）-> -1
+const PERIOD_CN: Record<string, number> = {
+  '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10, '十一': 11, '十二': 12,
+};
+const getPeriodIndex = (time: string): number => {
+  if (!time) return -1;
+  const m = time.match(/第([一二三四五六七八九十]+)节/);
+  if (!m) return -1;
+  return PERIOD_CN[m[1]] ?? -1;
+};
+
+// 提取节次名（"第一节课 08:20-09:05" -> "第一节课"；非节次返回原始串）
+const periodName = (time: string): string => {
+  if (!time) return '';
+  const m = time.match(/第([一二三四五六七八九十]+)节课/);
+  return m ? m[0] : time;
+};
+
+// 连堂分组核心：把已按天/周过滤且按时间排序的课程列表，合并"同名+同教室+同老师+节次相邻"的课程为组。
+// 组进度/进行中状态按【组首开始 ~ 组末结束】整体区间计算（课间休息也算在连堂内）。
+const buildGroups = (list: Schedule[]) => {
+  const groups: Array<{
+    key: number; name: string; classroom: string; teacher: string; weeks: number;
+    start: string; end: string; count: number; isNow: boolean; progress: number;
+    courses: Schedule[]; breaks: number[];
+  }> = [];
+  let cur: Schedule[] = [];
+  let prev: Schedule | null = null;
+
+  const flush = (): void => {
+    if (!cur.length) return;
+    const first = cur[0];
+    const last = cur[cur.length - 1];
+    const nowCourse = cur.find(c => isNowCourse(c));
+    const gStartMin = parseMinutes(courseStart(first.time));
+    const gEndMin = parseMinutes(courseEnd(last.time));
+    const inGroupNow = gStartMin <= nowMinutes.value && nowMinutes.value < gEndMin;
+    // 组整体进度（首节开始 ~ 末节结束）
+    const gp = gEndMin > gStartMin
+      ? Math.min(100, Math.max(0, Math.round(((nowMinutes.value - gStartMin) / (gEndMin - gStartMin)) * 100)))
+      : 0;
+    // 相邻两节之间的休息分钟数（供展开明细显示"课间休息 X 分钟"）
+    const breaks: number[] = [];
+    for (let i = 1; i < cur.length; i++) {
+      const gap = parseMinutes(courseStart(cur[i].time)) - parseMinutes(courseEnd(cur[i - 1].time));
+      breaks.push(Math.max(0, gap));
+    }
+    groups.push({
+      key: first.id ?? 0,
+      name: first.name,
+      classroom: first.classroom,
+      teacher: first.teacher,
+      weeks: first.weeks,
+      start: courseStart(first.time),
+      end: courseEnd(last.time),
+      count: cur.length,
+      isNow: inGroupNow,
+      progress: gp,
+      courses: [...cur],
+      breaks,
+    });
+    cur = [];
+  };
+
+  for (const c of list) {
+    const curIdx = getPeriodIndex(c.time);
+    const prevIdx = prev ? getPeriodIndex(prev.time) : -1;
+    const consecutive =
+      !!prev && curIdx !== -1 && prevIdx !== -1 && curIdx === prevIdx + 1 &&
+      c.name === prev.name && c.classroom === prev.classroom && c.teacher === prev.teacher;
+    if (consecutive) {
+      cur.push(c);
+    } else {
+      flush();
+      cur = [c];
+    }
+    prev = c;
+  }
+  flush();
+  return groups;
+};
+
+// 周课表（弹窗 tab 内容）：按当前选中 tab（currentDay）+ 所选教学周（viewWeek）响应式计算。
 // 修复：原实现是手动维护共享 weekCourses，NutUI 的 tab-pane 全部常驻 DOM（display 切换），
 // 共享数组切换 tab 时界面不跟随刷新；改为 computed 后 currentDay 一变即自动重算，不依赖事件时序。
-const weekCoursesByDay = computed<Schedule[]>(() => {
-  if (!schedules.value.length) return [];
+const courseGroupsByDay = computed(() => {
+  if (semesterNotStarted.value) return [];
   const dayOfWeek = getDayOfWeek(parseInt(currentDay.value, 10));
   const coursesOfDay = schedules.value.filter(c => getCourseDayOfWeek(c) === dayOfWeek);
-  const active = coursesOfDay.filter(c => isCourseInWeek(c, viewWeek.value));
-  // [DEBUG] 打印 computed 计算结果（与弹窗 100% 对应）
-  console.log('[SCHEDULE] computed day=', currentDay.value, 'dayOfWeek=', dayOfWeek,
-    'currentWeek=', viewWeek.value,
-    'total=', schedules.value.length,
-    'coursesOfDay=', coursesOfDay.length,
-    'active=', active.length,
-    'result=', sortCoursesByTime(active.length > 0 ? active : coursesOfDay).map(c => ({ name: c.name, dayofweek: c.dayofweek, time: c.time })));
-  return sortCoursesByTime(active.length > 0 ? active : coursesOfDay);
+  // 严格按所选教学周过滤：该周该天没课就显示空状态，不再回退到其他周的数据
+  return buildGroups(sortCoursesByTime(coursesOfDay.filter(c => isCourseInWeek(c, viewWeek.value))));
 });
+
+// 连堂卡片展开状态（key = 组内第一节课 id）与切换
+const expandedGroups = ref<Record<number, boolean>>({});
+const toggleGroup = (key: number): void => {
+  expandedGroups.value = { ...expandedGroups.value, [key]: !expandedGroups.value[key] };
+};
 
 const updateWeekCourses = (dayKey: string): void => {
   const dayOfWeek = getDayOfWeek(parseInt(dayKey, 10));
   const coursesOfDay = schedules.value.filter(c => getCourseDayOfWeek(c) === dayOfWeek);
-  // 周课表优先过滤出当前查看周有课的课程
+  // 严格按所选教学周过滤：该周该天没课就留空
   const activeCourses = coursesOfDay.filter((course: Schedule) => isCourseInWeek(course, viewWeek.value));
-  const result = activeCourses.length > 0 ? activeCourses : coursesOfDay;
-  weekCourses.value = sortCoursesByTime(result);
+  weekCourses.value = sortCoursesByTime(activeCourses);
 };
 
 const handleTabClick = ({ paneKey }: { paneKey: string }): void => {
@@ -1278,24 +1407,27 @@ useDidShow(async () => {
 
 .schedule__title-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
+  /* 右侧留出空间，避免压住弹窗右上角的 X 关闭按钮 */
+  padding-right: 70px;
 }
 
-/* 周导航（‹ 第N周 › + 回到本周）：独占一行，避开右上角关闭按钮 */
+/* 周导航（‹ 日期范围 ›）：与标题同行靠右；点击日期范围回到本周 */
 .schedule__week-nav {
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-top: 16px;
+  margin-left: auto;
 }
 
 .schedule__week-arrow {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 52px;
-  font-size: 40px;
+  width: 52px;
+  height: 48px;
+  font-size: 36px;
   line-height: 1;
   color: #5b7cfa;
 }
@@ -1305,20 +1437,16 @@ useDidShow(async () => {
 }
 
 .schedule__week-nav-label {
-  min-width: 130px;
+  min-width: 150px;
   text-align: center;
-  font-size: 26px;
-  font-weight: 600;
-  color: #2b3245;
-}
-
-.schedule__week-back {
-  margin-left: 20px;
-  padding: 8px 22px;
-  border-radius: 12px;
-  background: #f0f2f5;
   font-size: 22px;
   color: #9aa5b8;
+}
+
+/* 非本周时高亮，提示可点击回到本周 */
+.schedule__week-nav-label--offset {
+  color: #5b7cfa;
+  font-weight: 600;
 }
 
 .schedule__subtitle {
@@ -1476,6 +1604,99 @@ useDidShow(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 连堂合并：课程名 + 徽标同行 */
+.course-item__name-row {
+  display: flex;
+  align-items: center;
+}
+
+.course-item__name-row .course-item__name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.course-item__merged-tag {
+  flex-shrink: 0;
+  margin-left: 16px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #5b7cfa 0%, #8b5cf6 100%);
+  font-size: 20px;
+  font-weight: 500;
+  color: #fff;
+}
+
+/* 连堂卡片视觉强化：时间块加高、左侧渐变条 */
+.course-item--merged .course-item__time {
+  background: linear-gradient(180deg, #eef1ff 0%, #e6ebff 100%);
+  min-height: 104px;
+}
+
+.course-item--merged {
+  position: relative;
+}
+
+.course-item--merged::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 8px;
+  border-radius: 0 8px 8px 0;
+  background: linear-gradient(180deg, #5b7cfa 0%, #8b5cf6 100%);
+}
+
+.course-item--merged.course-item--now .course-item__time {
+  background: linear-gradient(135deg, #5b7cfa 0%, #8b5cf6 100%);
+}
+
+.course-item--expanded {
+  border-color: #dde4ff;
+}
+
+/* 连堂展开明细：每节一行 + 课间休息 */
+.course-item__detail {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 2px dashed #eef0f5;
+}
+
+.course-item__detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: #f7f8fc;
+}
+
+.course-item__detail-row--now {
+  background: #eef1ff;
+}
+
+.course-item__detail-period {
+  font-size: 24px;
+  font-weight: 500;
+  color: #2b3245;
+}
+
+.course-item__detail-row--now .course-item__detail-period {
+  color: #5b7cfa;
+}
+
+.course-item__detail-time {
+  font-size: 22px;
+  color: #6b7486;
+}
+
+.course-item__break {
+  padding: 6px 18px 10px;
+  font-size: 20px;
+  color: #b0b8c8;
 }
 
 .course-item__meta {
