@@ -22,8 +22,6 @@ declare module 'vue' {
     NutPagination: typeof import('@nutui/nutui-taro')['Pagination']
     NutPopup: typeof import('@nutui/nutui-taro')['Popup']
     NutSearchbar: typeof import('@nutui/nutui-taro')['Searchbar']
-    NutTabPane: typeof import('@nutui/nutui-taro')['TabPane']
-    NutTabs: typeof import('@nutui/nutui-taro')['Tabs']
     NutTextarea: typeof import('@nutui/nutui-taro')['Textarea']
   }
 }

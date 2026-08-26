@@ -157,68 +157,84 @@
       <view class="schedule">
         <view class="schedule__header">
           <view class="schedule__title-row">
-            <view class="schedule__title">本周课表</view>
-            <view v-if="currentWeek > 0" class="schedule__week-tag">第{{ currentWeek }}周</view>
+            <view class="schedule__title">{{ schedulePopupTitle }}</view>
+          </view>
+          <!-- 周导航：支持浏览整学期任意一周（数据本身就是全学期的） -->
+          <view class="schedule__week-nav">
+            <view
+              class="schedule__week-arrow"
+              :class="{ 'schedule__week-arrow--disabled': !canPrevWeek }"
+              @click="prevWeek"
+            >‹</view>
+            <view class="schedule__week-nav-label">{{ weekNavLabel }}</view>
+            <view
+              class="schedule__week-arrow"
+              :class="{ 'schedule__week-arrow--disabled': !canNextWeek }"
+              @click="nextWeek"
+            >›</view>
+            <view v-if="viewWeekOffset !== 0" class="schedule__week-back" @click="viewWeekOffset = 0">回到本周</view>
           </view>
           <view class="schedule__subtitle">{{ currentDayText }}</view>
           <view v-if="todayNextText" class="schedule__next">{{ todayNextText }}</view>
         </view>
-        <nut-tabs
-          v-model="currentDay"
-          type="smile"
-          title-scroll
-          @click="handleTabClick"
-          class="schedule__tabs"
-        >
-          <nut-tab-pane
-            v-for="(day, index) in weekDays"
-            :key="index"
-            :title="day"
-            :pane-key="String(index + 1)"
+        <!-- 自绘 tab 栏：绕开 nut-tabs（小程序下 tab-pane 常驻 DOM + display 切换在部分环境不生效，导致只显示第一个 tab） -->
+        <view class="schedule__tabs">
+          <view
+            v-for="(day, i) in weekDays"
+            :key="i"
+            class="schedule__tab"
+            :class="{
+              'schedule__tab--active': currentDay === String(i + 1),
+              'schedule__tab--today': String(i + 1) === todayIndex() && currentDay !== String(i + 1)
+            }"
+            @click="currentDay = String(i + 1)"
           >
-            <view class="schedule-list">
-              <view
-                v-for="course in weekCourses"
-                :key="course.id"
-                class="course-item"
-                :class="{ 'course-item--now': isNowCourse(course) }"
-              >
-                <view class="course-item__time">
-                  <text class="course-item__time-start">{{ courseStart(course.time) }}</text>
-                  <text class="course-item__time-end">{{ courseEnd(course.time) }}</text>
+            <view class="schedule__tab-name">{{ day.charAt(2) }}</view>
+            <view class="schedule__tab-date">{{ tabDates[i] }}</view>
+            <view v-if="String(i + 1) === todayIndex()" class="schedule__tab-dot"></view>
+          </view>
+        </view>
+        <view class="schedule-list">
+          <view
+            v-for="course in weekCoursesByDay"
+            :key="course.id"
+            class="course-item"
+            :class="{ 'course-item--now': isNowCourse(course) }"
+          >
+            <view class="course-item__time">
+              <text class="course-item__time-start">{{ courseStart(course.time) }}</text>
+              <text class="course-item__time-end">{{ courseEnd(course.time) }}</text>
+            </view>
+            <view class="course-item__body">
+              <view class="course-item__name">{{ course.name }}</view>
+              <view class="course-item__meta">
+                <view v-if="course.classroom" class="course-item__meta-item">
+                  <Location2 color="#9aa5b8" size="24px" />
+                  <text>{{ course.classroom }}</text>
                 </view>
-                <view class="course-item__body">
-                  <view class="course-item__name">{{ course.name }}</view>
-                  <view class="course-item__meta">
-                    <view v-if="course.classroom" class="course-item__meta-item">
-                      <Location2 color="#9aa5b8" size="24px" />
-                      <text>{{ course.classroom }}</text>
-                    </view>
-                    <view v-if="course.teacher" class="course-item__meta-item">
-                      <People color="#9aa5b8" size="24px" />
-                      <text>{{ course.teacher }}</text>
-                    </view>
-                    <text v-if="course.weeks" class="course-item__weeks">{{ formatWeeks(course.weeks) }}</text>
-                  </view>
-                  <view v-if="isNowCourse(course)" class="course-item__progress">
-                    <view class="course-item__progress-track">
-                      <view class="course-item__progress-inner" :style="{ width: courseProgress(course) + '%' }"></view>
-                    </view>
-                    <text class="course-item__progress-text">已上 {{ courseProgress(course) }}%</text>
-                  </view>
+                <view v-if="course.teacher" class="course-item__meta-item">
+                  <People color="#9aa5b8" size="24px" />
+                  <text>{{ course.teacher }}</text>
                 </view>
+                <text v-if="course.weeks" class="course-item__weeks">{{ formatWeeks(course.weeks) }}</text>
               </view>
-              <view v-if="!weekCourses.length" class="schedule-empty">
-                <Tips color="#c2c9d6" size="60px" />
-                <view v-if="currentDay === todayIndex() && nextClassSummary" class="schedule-empty__info">
-                  <text class="schedule-empty__hint">今天没课，下次上课</text>
-                  <text class="schedule-empty__main">{{ nextClassSummary.day }} {{ nextClassSummary.start }} · {{ nextClassSummary.name }}</text>
+              <view v-if="isNowCourse(course)" class="course-item__progress">
+                <view class="course-item__progress-track">
+                  <view class="course-item__progress-inner" :style="{ width: courseProgress(course) + '%' }"></view>
                 </view>
-                <text v-else class="schedule-empty__hint">这天没有课程，好好休息～</text>
+                <text class="course-item__progress-text">已上 {{ courseProgress(course) }}%</text>
               </view>
             </view>
-          </nut-tab-pane>
-        </nut-tabs>
+          </view>
+          <view v-if="!weekCoursesByDay.length" class="schedule-empty">
+            <Tips color="#c2c9d6" size="60px" />
+            <view v-if="viewWeekOffset === 0 && currentDay === todayIndex() && nextClassSummary" class="schedule-empty__info">
+              <text class="schedule-empty__hint">今天没课，下次上课</text>
+              <text class="schedule-empty__main">{{ nextClassSummary.day }} {{ nextClassSummary.start }} · {{ nextClassSummary.name }}</text>
+            </view>
+            <text v-else class="schedule-empty__hint">这天没有课程，好好休息～</text>
+          </view>
+        </view>
       </view>
     </nut-popup>
   </view>
@@ -285,11 +301,22 @@ const CACHE_KEYS = {
 // 未绑定时本地标记的保鲜时间（分钟）：过期后才会再次尝试拉取
 const NO_SCHEDULE_TTL_MIN = 30;
 
-// 放假区间（MM-DD），命中期间禁止课表绑定，避免拉到错误的教务数据。
+// 课表绑定受限窗口（MM-DD）：命中期间禁止绑定，避免拉到错误的教务数据。
+// 结束日取「开学前 7 天」——与后端 semester.fall-start=09-01 / spring-start=03-01 对齐：
+// 秋季开学 09-01 → 08-25 解除；春季开学 03-01 → 02-22 解除（开学前一周起允许绑定）。
 const HOLIDAY_RANGES: Array<[string, string]> = [
-  ['01-20', '02-28'], // 寒假
-  ['07-01', '08-31'], // 暑假
+  ['01-20', '02-22'], // 寒假（开学前一周 02-22 解除）
+  ['07-01', '08-25'], // 暑假（开学前一周 08-25 解除）
 ];
+
+// [TEST-ONLY] 模拟开学周：强制当前教学周为指定值（1=开学第一周，2=开学第二周…），用于正式开学前的联调测试。
+// 正式发布前务必改回 0（或删除本常量及下方覆盖逻辑），否则线上永远显示固定的周次。
+const TEST_FORCE_WEEK = 2;
+// [TEST-ONLY] 模拟当前时间：用于验证“周日晚上”等跨周场景，格式 'YYYY/MM/DD HH:mm:ss'（iOS 需用斜杠）。
+// 正式发布前务必改回 null，否则页面所有时间相关逻辑都会固定在这个时刻。
+const TEST_FAKE_NOW: string | null = null;
+// 统一取当前时间（发布时等价于 new Date()）
+const fakeNow = (): Date => (TEST_FAKE_NOW ? new Date(TEST_FAKE_NOW) : new Date());
 
 // 响应式数据
 const schedules = ref<Schedule[]>([]);
@@ -297,7 +324,34 @@ const verifyCodeUrl = ref<string>('');
 const verifyCodeView = ref(false);
 const classView = ref(false);
 const isLoading = ref(false);
-const currentDay = ref(String(new Date().getDay() === 0 ? 7 : new Date().getDay()));
+const currentDay = ref(String(fakeNow().getDay() === 0 ? 7 : fakeNow().getDay()));
+// 弹窗查看的周偏移：0=本周，1=下周（周日晚上也能提前看下周课表）
+const viewWeekOffset = ref(0);
+// 弹窗实际过滤用的教学周（currentWeek 未知时为 0，此时不过滤周次）
+const viewWeek = computed(() => (currentWeek.value > 0 ? currentWeek.value + viewWeekOffset.value : 0));
+
+// 周导航：整学期任意周切换（数据为全学期课表，weeks 位掩码覆盖 1-25 周）
+const TOTAL_WEEKS = 25;
+const canPrevWeek = computed(() => (currentWeek.value > 0 ? viewWeek.value > 1 : viewWeekOffset.value > -3));
+const canNextWeek = computed(() => (currentWeek.value > 0 ? viewWeek.value < TOTAL_WEEKS : viewWeekOffset.value < 8));
+const prevWeek = (): void => { if (canPrevWeek.value) viewWeekOffset.value -= 1; };
+const nextWeek = (): void => { if (canNextWeek.value) viewWeekOffset.value += 1; };
+
+// 导航中间的文案：显示所选周的日期范围（如 8/24 - 8/30），周次信息只在标题展示，避免重复
+const weekNavLabel = computed<string>(() => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const mondayTs = getMondayTimestamp(fakeNow()) + viewWeekOffset.value * 7 * DAY_MS;
+  const monday = new Date(mondayTs);
+  const sunday = new Date(mondayTs + 6 * DAY_MS);
+  return `${monday.getMonth() + 1}/${monday.getDate()} - ${sunday.getMonth() + 1}/${sunday.getDate()}`;
+});
+
+// 弹窗标题
+const schedulePopupTitle = computed<string>(() => {
+  if (viewWeekOffset.value === 0) return '本周课表';
+  if (viewWeekOffset.value === 1) return '下周课表';
+  return viewWeek.value > 0 ? `第${viewWeek.value}周课表` : '课表';
+});
 const weekCourses = ref<Schedule[]>([]);
 const notifyRef = ref(null);
 // 当前教学周（后端统一计算，与课表过滤一致）
@@ -325,7 +379,17 @@ const getCourseDayOfWeek = (course: Schedule): string => {
 };
 
 // 今天的 tab 索引（周一=1 … 周日=7）
-const todayIndex = (): string => String(new Date().getDay() === 0 ? 7 : new Date().getDay());
+const todayIndex = (): string => String(fakeNow().getDay() === 0 ? 7 : fakeNow().getDay());
+
+// 本周一至周日的日期标签（如 8/24），与星期 tab 一一对应（查看下周时整体偏移一周）
+const tabDates = computed(() => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const monday = getMondayTimestamp(fakeNow()) + viewWeekOffset.value * 7 * DAY_MS;
+  return weekDays.map((_, i) => {
+    const d = new Date(monday + i * DAY_MS);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  });
+});
 
 // 从数据库格式如 "第五节课 14:20-15:05" 或 "14:20-15:05" 中精准提取开始/结束时间
 const courseStart = (time: string): string => {
@@ -347,11 +411,12 @@ const parseMinutes = (t: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-// 判断课程是否在指定周开课（数据库 bitmask 规则：第 1 位对应第 1 周，第 n 位对应第 n 周）
+// 判断课程是否在指定周开课（数据库 bitmask 规则：第 n 位对应第 n+1 周，即 week 周 = bit(week-1)；
+// 与后端 MyBatis/R2DBC 的 (weeks & (1 << (week-1))) != 0 保持一致，2026-08-25 修复偏移一位的 bug）
 const isCourseInWeek = (course: Schedule, week: number): boolean => {
   if (!course) return false;
   if (!week || week <= 0 || !course.weeks) return true; // 未获取到教学周或无周次限制时默认展示
-  return (course.weeks & (1 << week)) !== 0;
+  return (course.weeks & (1 << (week - 1))) !== 0;
 };
 
 // 课程是否正在上课（仅当天生效）
@@ -360,17 +425,17 @@ const isNowCourse = (course: Schedule): boolean => {
   const start = courseStart(course.time);
   const end = courseEnd(course.time);
   if (!start || !end) return false;
-  const now = new Date();
+  const now = fakeNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   return nowMin >= parseMinutes(start) && nowMin < parseMinutes(end);
 };
 
-// 周次 bitmask -> 可读文案（例如 65534 -> "第2-16周"）
+// 周次 bitmask -> 可读文案（例如 65534 -> "第2-16周"；bit(n-1)=1 表示第 n 周有课）
 const formatWeeks = (mask: number): string => {
   if (!mask) return '';
   const weeks: number[] = [];
   for (let i = 1; i <= 25; i++) {
-    if (mask & (1 << i)) weeks.push(i);
+    if (mask & (1 << (i - 1))) weeks.push(i);
   }
   if (!weeks.length) return '';
   const ranges: string[] = [];
@@ -411,7 +476,7 @@ const isNewWeek = (): boolean => {
     if (!lastUpdateStr) return true;
 
     const lastUpdate = new Date(lastUpdateStr);
-    const now = new Date();
+    const now = fakeNow();
 
     // 跨过周一零点即视为新的一周
     return getMondayTimestamp(now) > getMondayTimestamp(lastUpdate);
@@ -421,11 +486,12 @@ const isNewWeek = (): boolean => {
   }
 };
 
-// 是否处于放假区间：当前月日落在任一 HOLIDAY_RANGES 区间内即视为假期
+// 是否处于绑定受限窗口：当前月日落在任一 HOLIDAY_RANGES 区间内即禁止绑定。
+// 半开区间 [start, end)：结束日当天起放行（即"开学前一周当天"即可开始绑定），结束日必须与后端开学日（09-01/03-01）保持 -7 天耦合。
 const isHoliday = (): boolean => {
-  const now = new Date();
+  const now = fakeNow();
   const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return HOLIDAY_RANGES.some(([start, end]) => md >= start && md <= end);
+  return HOLIDAY_RANGES.some(([start, end]) => md >= start && md < end);
 };
 
 // 计算属性：当前周（如果已知）且当天的课程
@@ -475,7 +541,7 @@ const ongoingProgress = computed(() => (ongoingCourse.value ? courseProgress(ong
 
 // 问候语，根据当前时间动态变化
 const greeting = computed(() => {
-  const hour = new Date().getHours();
+  const hour = fakeNow().getHours();
   if (hour < 6) return '夜深了';
   if (hour < 12) return '早上好';
   if (hour < 14) return '中午好';
@@ -485,16 +551,17 @@ const greeting = computed(() => {
 
 // 今天的日期文案，例如：8月14日 · 星期五 · 第2周
 const todayText = computed(() => {
-  const now = new Date();
+  const now = fakeNow();
   const base = `${now.getMonth() + 1}月${now.getDate()}日 · ${WEEK_DAYS[now.getDay()]}`;
   return currentWeek.value > 0 ? `${base} · 第${currentWeek.value}周` : base;
 });
 
-// 课表弹窗副标题：当前选中日 + 是否今天
+// 课表弹窗副标题：当前选中日 + 是否今天（仅查看本周时标注“今天”）
 const currentDayText = computed(() => {
   const idx = Number(currentDay.value) - 1;
   const day = weekDays[idx] || '';
-  return day + (currentDay.value === todayIndex() ? ' · 今天' : '');
+  const suffix = viewWeekOffset.value === 0 && currentDay.value === todayIndex() ? ' · 今天' : '';
+  return day + suffix;
 });
 
 // 实时时钟：驱动“正在上课”进度条动态刷新（每 30 秒一跳）
@@ -506,7 +573,8 @@ const nowMinutes = computed(() => {
 });
 const startTick = (): void => {
   if (tickTimer) return;
-  tickTimer = setInterval(() => { nowTick.value = Date.now(); }, 30000);
+  tickTimer = setInterval(() => { nowTick.value = TEST_FAKE_NOW ? new Date(TEST_FAKE_NOW).getTime() : Date.now(); }, 30000);
+  nowTick.value = TEST_FAKE_NOW ? new Date(TEST_FAKE_NOW).getTime() : Date.now();
 };
 const stopTick = (): void => {
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
@@ -609,7 +677,7 @@ const nextClassSummary = computed<{ name: string; day: string; start: string; cl
 
 // 弹窗头部“今日”附加行：下节课预告
 const todayNextText = computed<string>(() => {
-  if (currentDay.value !== todayIndex()) return '';
+  if (viewWeekOffset.value !== 0 || currentDay.value !== todayIndex()) return '';
   if (!todayCourses.value.length) return '今日无课';
   const next = nextCourse.value;
   if (next) return `下节：${next.name} ${courseStart(next.time)}${next.classroom ? ' · ' + next.classroom : ''}`;
@@ -764,6 +832,9 @@ const loadSchedules = async (): Promise<void> => {
       if (list && list.length > 0) {
         const fetchedSchedules = list as Schedule[];
         schedules.value = fetchedSchedules;
+        // [DEBUG] 打印拉取到的课表总量与字段样例
+        console.log('[SCHEDULE] fetched=', fetchedSchedules.length,
+          'sample=', fetchedSchedules.slice(0, 3).map(c => ({ name: c.name, dayofweek: c.dayofweek, dayOfWeek: c.dayOfWeek, weeks: c.weeks })));
         storage.setSchedules(fetchedSchedules);
         userStore.loginSchool();
       } else {
@@ -785,6 +856,7 @@ const loadCurrentWeek = async (): Promise<void> => {
   try {
     const data = await getCurrentWeek();
     currentWeek.value = data.week || 0;
+    if (TEST_FORCE_WEEK > 0) currentWeek.value = TEST_FORCE_WEEK; // [TEST-ONLY] 模拟开学第一天覆盖
     currentSemester.value = data.semester || '';
   } catch (error) {
     console.error('获取当前教学周失败:', error);
@@ -817,8 +889,9 @@ const handleCheckMyClass = async (): Promise<void> => {
   }
 
   if (schedules.value && schedules.value.length > 0) {
-    const today = new Date().getDay();
+    const today = fakeNow().getDay();
     const paneKey = String(today === 0 ? 7 : today);
+    viewWeekOffset.value = 0;
     updateWeekCourses(paneKey);
     currentDay.value = paneKey;
     classView.value = true;
@@ -826,7 +899,7 @@ const handleCheckMyClass = async (): Promise<void> => {
     triggerNotify('warning', '课表加载失败，请稍后重试');
   } else {
     if (isHoliday()) {
-      triggerNotify('warning', '放假期间暂不开放课表绑定，开学后再来绑定吧~');
+      triggerNotify('warning', '课表绑定将在开学前一周开放，现在还早，到时再来绑定吧~');
       return;
     }
     verifyCodeView.value = true;
@@ -834,11 +907,29 @@ const handleCheckMyClass = async (): Promise<void> => {
   }
 };
 
+// 周课表（弹窗 tab 内容）：按当前选中 tab（currentDay）响应式计算。
+// 修复：原实现是手动维护共享 weekCourses，NutUI 的 tab-pane 全部常驻 DOM（display 切换），
+// 共享数组切换 tab 时界面不跟随刷新；改为 computed 后 currentDay 一变即自动重算，不依赖事件时序。
+const weekCoursesByDay = computed<Schedule[]>(() => {
+  if (!schedules.value.length) return [];
+  const dayOfWeek = getDayOfWeek(parseInt(currentDay.value, 10));
+  const coursesOfDay = schedules.value.filter(c => getCourseDayOfWeek(c) === dayOfWeek);
+  const active = coursesOfDay.filter(c => isCourseInWeek(c, viewWeek.value));
+  // [DEBUG] 打印 computed 计算结果（与弹窗 100% 对应）
+  console.log('[SCHEDULE] computed day=', currentDay.value, 'dayOfWeek=', dayOfWeek,
+    'currentWeek=', viewWeek.value,
+    'total=', schedules.value.length,
+    'coursesOfDay=', coursesOfDay.length,
+    'active=', active.length,
+    'result=', sortCoursesByTime(active.length > 0 ? active : coursesOfDay).map(c => ({ name: c.name, dayofweek: c.dayofweek, time: c.time })));
+  return sortCoursesByTime(active.length > 0 ? active : coursesOfDay);
+});
+
 const updateWeekCourses = (dayKey: string): void => {
   const dayOfWeek = getDayOfWeek(parseInt(dayKey, 10));
   const coursesOfDay = schedules.value.filter(c => getCourseDayOfWeek(c) === dayOfWeek);
-  // 周课表优先过滤出当前教学周有课的课程
-  const activeCourses = coursesOfDay.filter((course: Schedule) => isCourseInWeek(course, currentWeek.value));
+  // 周课表优先过滤出当前查看周有课的课程
+  const activeCourses = coursesOfDay.filter((course: Schedule) => isCourseInWeek(course, viewWeek.value));
   const result = activeCourses.length > 0 ? activeCourses : coursesOfDay;
   weekCourses.value = sortCoursesByTime(result);
 };
@@ -1190,13 +1281,44 @@ useDidShow(async () => {
   align-items: center;
 }
 
-.schedule__week-tag {
-  margin-left: 16px;
-  padding: 6px 16px;
+/* 周导航（‹ 第N周 › + 回到本周）：独占一行，避开右上角关闭按钮 */
+.schedule__week-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.schedule__week-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 52px;
+  font-size: 40px;
+  line-height: 1;
+  color: #5b7cfa;
+}
+
+.schedule__week-arrow--disabled {
+  color: #c9cfda;
+}
+
+.schedule__week-nav-label {
+  min-width: 130px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 600;
+  color: #2b3245;
+}
+
+.schedule__week-back {
+  margin-left: 20px;
+  padding: 8px 22px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #5b7cfa 0%, #8b5cf6 100%);
+  background: #f0f2f5;
   font-size: 22px;
-  color: #fff;
+  color: #9aa5b8;
 }
 
 .schedule__subtitle {
@@ -1211,28 +1333,73 @@ useDidShow(async () => {
   color: #5b7cfa;
 }
 
-.schedule .nut-tabs {
+/* 自绘星期 tab 栏（替代 nut-tabs，避免小程序下 tab-pane 常驻 DOM 切换不生效） */
+.schedule__tabs {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  margin: 24px 32px 8px;
+  padding: 10px;
+  background: #f5f7fb;
+  border-radius: 24px;
+  box-sizing: border-box;
+}
+
+.schedule__tab {
+  position: relative;
   flex: 1;
-  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  --nut-tabs-titles-background-color: #f5f7fb;
-  --nut-tabs-titles-item-color: #9aa5b8;
-  --nut-tabs-titles-item-active-color: #5b7cfa;
-  --nut-tabs-tab-smile-color: #5b7cfa;
-  --nut-tabs-horizontal-tab-line-color: #5b7cfa;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 16px;
+  border-radius: 18px;
+  color: #9aa5b8;
+  transition: all 0.2s;
 }
 
-.schedule .nut-tabs__titles {
-  flex-shrink: 0;
-  margin: 20px 40px 8px;
-  border-radius: 20px;
+.schedule__tab--today {
+  color: #5b7cfa;
 }
 
-.schedule .nut-tabs__content {
+.schedule__tab--active {
+  background: linear-gradient(135deg, #5b7cfa 0%, #8b5cf6 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(91, 124, 250, 0.28);
+}
+
+.schedule__tab-name {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.schedule__tab-date {
+  margin-top: 6px;
+  font-size: 20px;
+  opacity: 0.72;
+}
+
+.schedule__tab-dot {
+  position: absolute;
+  top: 8px;
+  right: 50%;
+  margin-right: -34px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.schedule__tab--active .schedule__tab-dot {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.schedule .schedule-list {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 
 .schedule-list {
