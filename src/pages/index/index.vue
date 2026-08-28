@@ -297,6 +297,7 @@ import {
   API_ROOT,
   getClassVerifyCode,
   loginToStudy,
+  loginTaskStatus,
   getMyClass,
   getLoginId,
   getCurrentWeek
@@ -823,31 +824,71 @@ const handleWeChatLogin = async (): Promise<void> => {
   }
 };
 
+// 轮询登录任务结果：每 2s 一次，最多 60s；done 返回 {code,msg}，failed 抛错
+const pollTask = async (taskId: string): Promise<{ code: number; msg: string }> => {
+  for (let i = 0; i < 30; i++) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    let st: any;
+    try {
+      st = await loginTaskStatus(taskId);
+    } catch (e) {
+      continue; // 单次查询失败继续等
+    }
+    const stData = st?.data?.data;
+    if (!stData) continue;
+    if (stData.status === 'done') {
+      return { code: Number(stData.resultCode || 0), msg: stData.resultMsg || '' };
+    }
+    if (stData.status === 'failed') {
+      throw new Error(stData.error || '登录处理失败');
+    }
+  }
+  throw new Error('登录处理超时，请稍后重试');
+};
+
 const handleSchoolLogin = async (): Promise<void> => {
-  if (!loginForm.username || !loginForm.password || !loginForm.verifyCode) {
-    triggerNotify('warning', '请填写完整信息');
+  if (!loginForm.username || !loginForm.password) {
+    triggerNotify('warning', '请填写学号和密码');
     return;
   }
 
   isLoading.value = true;
 
   try {
+    // 提交登录任务：无手输验证码 → auto（后端自取验证码 + OCR）；有 → manual（人工验证码兜底）
+    const code = loginForm.verifyCode;
     const response = await loginToStudy(
       loginForm.username,
       loginForm.password,
-      loginForm.verifyCode
+      code
     );
+    const taskId = response?.data?.data?.taskId;
+    if (!taskId) {
+      if (response?.data?.code === 409) {
+        triggerNotify('warning', '已有登录任务处理中，请稍候');
+        return;
+      }
+      throw new Error('未获取到登录任务，请重试');
+    }
 
-    const { code, data } = response.data;
+    const taskResult = await pollTask(taskId);
 
-    if (code === 200) {
+    // 401 = 验证码自动识别失败 → 弹人工输入
+    if (taskResult.code === 401 && !loginForm.verifyCode) {
+      verifyCodeView.value = true;
+      await updateVerifyCode();
+      triggerNotify('warning', '验证码自动识别失败，请手动输入');
+      return;
+    }
+
+    if (taskResult.code === 200) {
       userStore.loginSchool();
       triggerNotify("success", "登录成功！");
       verifyCodeView.value = false;
       Object.assign(loginForm, { username: '', password: '', verifyCode: '' });
       await loadSchedules();
     } else {
-      triggerNotify("danger", data || '登录失败');
+      triggerNotify("danger", taskResult.msg || '登录失败');
       await updateVerifyCode();
     }
   } catch (error) {

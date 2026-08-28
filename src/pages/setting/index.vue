@@ -30,6 +30,17 @@
           <ArrowRight2 class="setting-item__arrow" color="#c2c9d6" size="28px" />
         </view>
 
+        <view class="setting-item" @click="handleUpdateSchedule">
+          <view class="setting-item__icon setting-item__icon--teal">
+            <Refresh color="#10b981" size="34px" />
+          </view>
+          <view class="setting-item__body">
+            <view class="setting-item__title">更新课表</view>
+            <view class="setting-item__desc">同步教务最新课表（免输入账号密码）</view>
+          </view>
+          <ArrowRight2 class="setting-item__arrow" color="#c2c9d6" size="28px" />
+        </view>
+
         <view class="setting-item" @click="showCleanCacheDialog = true">
           <view class="setting-item__icon setting-item__icon--red">
             <Del color="#ff6b6b" size="34px" />
@@ -118,11 +129,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { getUser, changeUserName } from "../../services/weibo";
-import { cleanCache, submitFeedback } from "../../services/api";
+import { cleanCache, submitFeedback, loginToStudyforUpdate, loginTaskStatus } from "../../services/api";
 import { User } from '@/model/user';
 // @ts-ignore
 import notify from '../../components/notify.vue';
-import { Edit, Del, ArrowRight2, Message } from '@nutui/icons-vue-taro';
+import { Edit, Del, ArrowRight2, Message, Refresh } from '@nutui/icons-vue-taro';
+import Taro from '@tarojs/taro';
 
 const showCleanCacheDialog = ref(false);
 const user = ref<User | null>(null);
@@ -146,6 +158,63 @@ const onConfirmClean = () => {
     .catch(() => {
       triggerNotify("danger", "清除失败，请稍后重试");
     });
+};
+
+// 更新课表：提交 update 任务（后端复用最近一次成功登录的账号密码），轮询结果，成功后清本地课表缓存
+const updateScheduleLoading = ref(false);
+const handleUpdateSchedule = async (): Promise<void> => {
+  if (updateScheduleLoading.value) return;
+  updateScheduleLoading.value = true;
+  try {
+    const resp = await loginToStudyforUpdate();
+    const taskId = resp?.data?.data?.taskId;
+    if (!taskId) {
+      if (resp?.data?.code === 409) {
+        triggerNotify('warning', '已有任务处理中，请稍候');
+      } else if (resp?.data?.code === 403) {
+        triggerNotify('warning', resp?.data?.data || '未找到可复用的登录信息，请先绑定课表');
+      } else {
+        triggerNotify('danger', '提交失败，请重试');
+      }
+      return;
+    }
+    let finished = false;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      let st: any;
+      try {
+        st = await loginTaskStatus(taskId);
+      } catch (e) {
+        continue;
+      }
+      const stData = st?.data?.data;
+      if (!stData) continue;
+      if (stData.status === 'done') {
+        finished = true;
+        if (Number(stData.resultCode) === 200) {
+          Taro.removeStorageSync('myClass');
+          Taro.removeStorageSync('myClassDate');
+          triggerNotify('success', '课表更新成功！');
+        } else {
+          triggerNotify('danger', stData.resultMsg || '更新失败，请重试');
+        }
+        break;
+      }
+      if (stData.status === 'failed') {
+        finished = true;
+        triggerNotify('danger', stData.error || '更新失败，请重试');
+        break;
+      }
+    }
+    if (!finished) {
+      triggerNotify('danger', '更新超时，请稍后重试');
+    }
+  } catch (e) {
+    console.error('更新课表失败:', e);
+    triggerNotify('danger', '网络错误，请稍后重试');
+  } finally {
+    updateScheduleLoading.value = false;
+  }
 };
 
 /**
@@ -356,6 +425,10 @@ onMounted(() => {
 
 .setting-item__icon--orange {
   background: #fff3e0;
+}
+
+.setting-item__icon--teal {
+  background: #e0f5ee;
 }
 
 .setting-item__body {

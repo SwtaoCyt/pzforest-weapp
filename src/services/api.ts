@@ -217,6 +217,27 @@ export const loginToStudy=(userName,passWord,verifyCode)=>{
   });
 }
 
+// 查询教务登录任务状态（提交后轮询：status=pending/processing/done/failed，result 为登录结果 JSON）
+export const loginTaskStatus=(taskId)=>{
+  return requestWithAuth({
+    url: API_ROOT + "/class/loginTaskStatus",
+    method:"GET",
+    data:{ taskId: taskId },
+  });
+}
+
+// 更新课表（队列任务）：账号密码由后端复用最近一次成功登录的加密记录，前端无需再输入
+export const loginToStudyforUpdate=()=>{
+  const JSESSIONID =  Taro.getStorageSync("JSESSIONID");
+  return requestWithAuth({
+    url: API_ROOT + "/class/loginToStudyforUpdate",
+    method:"POST",
+    data:{
+      JSESSIONID:JSESSIONID,
+    },
+  });
+}
+
 export const test = () => {
   console.log("hello");
 };
